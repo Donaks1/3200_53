@@ -80,7 +80,13 @@ There's no `src/components/` folder yet — as soon as more than one person is b
    ```
    Types: `feat`, `fix`, `chore`, `docs`, `refactor`. Examples: `feat/bone-svg-selection`, `fix/csv-export-encoding`, `chore/prettier-config`.
 3. **Keep PRs small** — one feature or fix per branch. Small PRs get reviewed faster and are easier to debug if something breaks.
-4. **Commit messages**: short, imperative summary (`Add zone selection to spine SVG`, not `updates`).
+4. **Save your changes as you go**:
+   ```bash
+   git status              # see what you've changed
+   git add <file>          # stage specific files (avoid `git add .` unless you've checked git status first)
+   git commit -m "<message>"
+   ```
+   **Commit messages**: short, imperative summary (`Add zone selection to spine SVG`, not `updates`).
 5. **Before opening a PR**:
    ```bash
    npm run lint
