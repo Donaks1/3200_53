@@ -67,7 +67,7 @@ There's no `src/components/` folder yet — as soon as more than one person is b
 
 ## GitHub workflow
 
-**`main` is always in a working, demoable state. Nobody commits directly to `main`. I have set it up so that we physically can't merge a pull request without one other person approving it. However, I have allowed 'forced' merges to still be allowed so if needed for some reason, we can still force a merge without approval.**
+**`main` is always in a working, demoable state. Nobody commits directly to `main`. Branch protection means you physically can't push straight to `main` or merge without going through a pull request — but approval isn't required, so a PR can be merged without another person reviewing it first.**
 
 1. **Sync before starting work**
    ```bash
@@ -98,8 +98,8 @@ There's no `src/components/` folder yet — as soon as more than one person is b
    ```bash
    git push -u origin <your-branch>
    ```
-   Click the "Compare & pull request" button GitHub shows on the repo page. Set the base branch to `main`. In the description, note *what* changed and *why*, and link the relevant task/issue if one exists. Request a review from at least one teammate. Don't merge your own PR without another set of eyes.
-7. **Address review comments**, then merge once approved. Use **Squash and merge**.
+   Click the "Compare & pull request" button GitHub shows on the repo page. Set the base branch to `main`. In the description, note *what* changed and *why*, and link the relevant task/issue if one exists. Request a review from at least one teammate — GitHub won't block the merge if no one reviews, but try to get a second set of eyes anyway.
+7. **Address any review comments**, then merge. **Squash and merge** is the only option GitHub allows on this repo.
 
 
 
