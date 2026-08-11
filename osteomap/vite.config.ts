@@ -17,6 +17,7 @@ export default defineConfig({
         short_name: 'OsteoMap',
         display: 'standalone',
         start_url: '/',
+        orientation: 'portrait',
       },
     }),
   ],
