@@ -61,12 +61,13 @@ Everything app-related lives under `osteomap/`:
 - **`vite.config.ts`** — plugin config (Tailwind, PWA manifest name/icons).
 - **`eslint.config.js`** — lint rules, if the team agrees to change them.
 - **`package.json`** — scripts and dependencies.
+- **`src/pages/`** — one file per page: `HomePage.tsx` (create/manage cases), `SkeletonPage.tsx` (SVG diagram editing), `ExportPage.tsx` (CSV/JPEG/PDF export). Placeholder content only for now — not yet wired up to `App.tsx`.
 
 There's no `src/components/` folder yet — as soon as more than one person is building UI, agree on a structure (e.g. `src/components/`, `src/hooks/`, `src/lib/`) before it grows organically.
 
-## 6. GitHub workflow
+## GitHub workflow
 
-**`main` is always in a working, demoable state. Nobody commits directly to `main`.**
+**`main` is always in a working, demoable state. Nobody commits directly to `main`. I have set it up so that we physically can't merge a pull request without one other person approving it. However, I have allowed 'forced' merges to still be allowed so if needed for some reason, we can still force a merge without approval.**
 
 1. **Sync before starting work**
    ```bash
