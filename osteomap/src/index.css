@@ -108,3 +108,15 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.skeleton-diagram {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+
+  svg {
+    height: min(78svh, 900px);
+    width: auto;
+    max-width: 100%;
+  }
+}
