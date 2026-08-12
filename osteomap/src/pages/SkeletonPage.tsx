@@ -2,14 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 
-// The SVG is inlined rather than shown through an <img> so each bone keeps its
-// own element in the DOM, ready to be selected and edited.
-// It ships with a <style> block of generic .cls-N rules that land in the
-// document once inlined, so they are namespaced per view to keep the back view
-// from clashing with the front when it is added.
+
 const skeletonFront = skeletonFrontSource
-  .replace(/<\?xml[^?]*\?>/, '')
-  .replaceAll('cls-', 'front-cls-')
+  .replace(/<\?xml[^?]*\?>/, '') // Strips the XML line of the svg file to prevent confusing HTML parser
+  .replaceAll('cls-', 'front-cls-') // Stops the front SVG CSS from clashing with back view
 
 // A bone is drawn as several numbered fragments, so a click lands on a path like
 // l_femur_3 rather than on the femur. Dropping the trailing number gives the bone.
