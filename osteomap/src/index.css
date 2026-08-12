@@ -108,3 +108,28 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.skeleton-diagram {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+
+  svg {
+    height: min(78svh, 900px);
+    width: auto;
+    max-width: 100%;
+    cursor: pointer;
+  }
+
+  /* The bone's own .front-cls-N rules set stroke on each path, so the selected
+     colour has to be applied to the paths themselves, not just their group. */
+  .is-selected,
+  .is-selected :is(path, polygon, circle, ellipse) {
+    stroke: var(--accent);
+    stroke-width: 0.9px;
+  }
+
+  .is-selected {
+    filter: drop-shadow(0 0 3px var(--accent-border));
+  }
+}
