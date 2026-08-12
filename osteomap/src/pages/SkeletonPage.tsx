@@ -27,7 +27,8 @@ function partsOfBone(diagram: HTMLElement, bone: string) {
   return [...diagram.querySelectorAll('[id]')].filter((el) => boneIdOf(el.id) === bone)
 }
 
-// l_femur -> "Left femur", r_iv-2 -> "Right iv 2"
+// l_femur -> "Left femur", r_iv-2 -> "Right iv 2". 
+// This part is literally just to generate full bone name from abbreviation.
 function boneLabel(id: string) {
   const words = id
     .replace(/^l_/, 'left_')
