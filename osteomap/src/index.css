@@ -9,6 +9,8 @@
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
+  /* Opaque so overlapping zones within a bone don't compound into darker seams. */
+  --bone-selected: #c77dff;
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
@@ -42,6 +44,7 @@
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
+    --bone-selected: #a855f7;
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
@@ -157,10 +160,13 @@ code {
     cursor: pointer;
   }
 
-  /* The bone's own .front-cls-N rules set stroke on each path, so the selected
-     colour has to be applied to the paths themselves, not just their group. */
+  /* The SVG's own .front-cls-N rules set fill and stroke on each path, so a
+     group can't tint its zones by inheritance — the colour has to land on the
+     shapes themselves. Two classes here beats the one-class .front-cls-N rules
+     on specificity, so no !important is needed. */
   .is-selected,
   .is-selected :is(path, polygon, circle, ellipse) {
+    fill: var(--bone-selected);
     stroke: var(--accent);
     stroke-width: 0.9px;
   }
