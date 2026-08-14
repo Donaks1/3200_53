@@ -18,6 +18,11 @@ function boneAt(target: Element, svg: SVGSVGElement): SVGGElement | null {
   return target.closest('g')
 }
 
+// Whether a click should select the whole bone or the single zone within it.
+// Nothing reads this yet — the toggle is here so the task bar has something real
+// to drive once the SVG is regrouped and zone selection can be wired up.
+type SelectionMode = 'bone' | 'zone'
+
 // l_femur -> "Left femur", r_iv-2 -> "Right iv 2".
 // This part is literally just to generate full bone name from abbreviation.
 function boneLabel(id: string) {
@@ -30,6 +35,7 @@ function boneLabel(id: string) {
 
 function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [selectedBone, setSelectedBone] = useState<SVGGElement | null>(null)
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
 
   // The CSS cascades the highlight from a group down onto its shapes, so the
   // class only ever needs to go on the bone itself.
@@ -46,7 +52,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   }
 
   return (
-    <div>
+    <div className="skeleton-page">
       <p>This is the skeleton page — where the SVG diagram will sit and be edited.</p>
       <p aria-live="polite">
         {selectedBone
@@ -66,6 +72,16 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
       <button type="button" onClick={() => onNavigate('export')}>
         Go to Export Page
       </button>
+      <div className="task-bar" role="toolbar" aria-label="Skeleton tools">
+        <button
+          type="button"
+          onClick={() =>
+            setSelectionMode((mode) => (mode === 'bone' ? 'zone' : 'bone'))
+          }
+        >
+          Selecting: {selectionMode === 'bone' ? 'Whole bone' : 'Bone zone'}
+        </button>
+      </div>
     </div>
   )
 }

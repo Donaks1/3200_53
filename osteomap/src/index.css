@@ -109,6 +109,42 @@ code {
   background: var(--code-bg);
 }
 
+/* Fills the #root column so the task bar has something to be pushed to the
+   bottom of, even before the diagram makes the page taller than the viewport. */
+.skeleton-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.task-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+
+  button {
+    font-family: inherit;
+    font-size: 16px;
+    color: var(--text-h);
+    background: var(--social-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: box-shadow 0.3s;
+
+    &:hover {
+      box-shadow: var(--shadow);
+    }
+  }
+}
+
 .skeleton-diagram {
   display: flex;
   justify-content: center;
