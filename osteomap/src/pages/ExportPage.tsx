@@ -1,55 +1,63 @@
 import type { NavigateFn } from './types'
+import './ExportPage.css' // Import the separate CSS file
 
 function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
+  // Mock metadata representing active case details (added in this step)
+  const activeCase = {
+    siteCode: "UWA_2026",
+    context: "Room_B_Spillway",
+    skeletonId: "SK_053",
+    lastModified: "12 Aug 2026",
+    zonesRecorded: 42
+  };
+
   return (
-    <div 
-      className="min-h-screen flex flex-col p-4"
-      style={{ background: 'var(--bg)', color: 'var(--text)' }}
-    >
+    <div className="export-page">
       {/* Header Navigation Bar */}
-      <header className="flex items-center justify-between py-4 border-b mb-6" style={{ borderColor: 'var(--border)' }}>
+      <header className="export-header">
         <button 
           type="button"
           onClick={() => onNavigate('skeleton')}
-          className="font-medium cursor-pointer text-sm"
-          style={{ color: 'var(--accent)' }}
+          className="export-header-back"
         >
           ← Back
         </button>
-        <h1 className="text-base font-bold" style={{ color: 'var(--text-h)' }}>
-          Export Record (Draft)
-        </h1>
+        <h1 className="export-header-title">Export Record (Active Case Setup)</h1>
         <button 
           type="button"
           onClick={() => onNavigate('home')}
-          className="text-sm font-medium cursor-pointer"
+          className="export-header-home"
         >
           Home
         </button>
       </header>
 
-      {/* Main Container - Basic Placeholder Scaffolding */}
-      <main className="flex-grow w-full max-w-md mx-auto flex flex-col justify-between gap-6">
+      {/* Main Container */}
+      <main className="export-main">
         
-        {/* Placeholder for case details */}
-        <div 
-          className="rounded-xl border p-5 text-left"
-          style={{ borderColor: 'var(--border)', background: 'var(--social-bg)' }}
-        >
-          <h2 className="text-xs uppercase tracking-wider font-bold mb-2" style={{ color: 'var(--accent)' }}>
-            Case Details
-          </h2>
-          <p className="text-sm">Metadata and configuration options will go here.</p>
+        {/* Case Details Box */}
+        <div className="export-card">
+          <h2 className="export-card-title">Active Case Data</h2>
+          <ul className="export-card-list">
+            <li><strong>Site Code:</strong> {activeCase.siteCode}</li>
+            <li><strong>Context:</strong> {activeCase.context}</li>
+            <li><strong>Skeleton ID:</strong> {activeCase.skeletonId}</li>
+            <li><strong>Bones Recorded:</strong> {activeCase.zonesRecorded}</li>
+          </ul>
         </div>
 
-        {/* Action Button Placeholders */}
-        <div className="flex flex-col gap-3 mt-auto pt-6">
+        {/* Warning text placeholder */}
+        <p className="export-reminder">
+          * Reminder: Local storage data is temporary. Please back up your records.
+        </p>
+
+        {/* Basic Button (unpolished styling, ready for future responsive improvements) */}
+        <div style={{ marginTop: '24px' }}>
           <button 
             type="button"
-            className="w-full font-bold py-3 px-4 rounded-xl text-center text-sm"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            className="export-button-basic"
           >
-            CSV Export
+            Export as CSV (Placeholder Action)
           </button>
         </div>
 
