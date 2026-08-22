@@ -88,6 +88,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const sheetRef = useRef<HTMLDivElement | null>(null)
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
+  const searchSwipeTriggered = useRef(false)
 
   const searchOptions = selectionMode === 'bone' ? boneOptions : zoneOptions
   const searchMatches = searchOptions
@@ -157,6 +158,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   }
 
   function handleSearchPointerDown(event: React.PointerEvent<Element>) {
+    searchSwipeTriggered.current = false
     if (!sheetOpen) {
       searchSwipeStart.current = { x: event.clientX, y: event.clientY }
     }
@@ -170,8 +172,17 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     const verticalDistance = start.y - event.clientY
     const horizontalDistance = Math.abs(start.x - event.clientX)
     if (verticalDistance > 40 && verticalDistance > horizontalDistance) {
+      searchSwipeTriggered.current = true
       setSheetOpen(true)
     }
+  }
+
+  function toggleSearchSheet() {
+    if (searchSwipeTriggered.current) {
+      searchSwipeTriggered.current = false
+      return
+    }
+    setSheetOpen((open) => !open)
   }
 
   return (
@@ -202,7 +213,12 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
           ref={sheetRef}
           className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 p-2 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur-md"
         >
-          {toolsOpen && (
+          <div
+            className={[
+              'overflow-hidden transition-all duration-300 ease-out',
+              toolsOpen ? 'max-h-24 translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0',
+            ].join(' ')}
+          >
             <div className="mb-2 grid grid-cols-3 gap-2 border-b border-slate-200 px-1 pb-2">
               <button
                 type="button"
@@ -231,7 +247,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
                 Select: {selectionMode === 'bone' ? 'Bone' : 'Zone'}
               </button>
             </div>
-          )}
+          </div>
 
           {sheetOpen && (
             <div className="mb-2 flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-3">
@@ -299,7 +315,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
             </button>
             <button
               type="button"
-              onClick={() => setSheetOpen(true)}
+              onClick={toggleSearchSheet}
               onPointerDown={handleSearchPointerDown}
               onPointerUp={handleSearchPointerUp}
               onPointerCancel={() => {
