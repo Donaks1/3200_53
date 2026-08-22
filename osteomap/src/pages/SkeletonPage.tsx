@@ -211,7 +211,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
             ].join(' ')}
           >
             <div className="border-t border-slate-200 bg-white px-3 pb-3 pt-2">
-              <div className="max-h-[32vh] space-y-2 overflow-y-auto">
+              <div className="search-results-scrollbar max-h-[32vh] space-y-2 overflow-y-auto">
                 {searchMatches.length > 0 ? (
                   searchMatches.map((bone) => (
                     <button
