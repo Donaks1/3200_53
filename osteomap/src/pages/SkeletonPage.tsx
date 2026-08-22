@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import { Search, X } from 'lucide-react'
@@ -60,13 +61,20 @@ function selectionLabel(selected: Element) {
   return `${name} — zone ${index} of ${bone.children.length}`
 }
 
-function boneOptionsFromSvg(markup: string) {
+type SearchOption = {
+  id: string
+  label: string
+}
+
+function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption[] {
   const document = new DOMParser().parseFromString(markup, 'image/svg+xml')
 
-  return [...document.querySelectorAll<SVGElement>('g[id]')].map((element) => ({
-    id: element.id,
-    label: boneLabel(element.id),
-  }))
+  return [...document.querySelectorAll<SVGElement>('[id]')]
+    .filter((element) => {
+      const isGroup = element.tagName.toLowerCase() === 'g'
+      return mode === 'bone' ? isGroup : !isGroup && element.closest('g') !== null
+    })
+    .map((element) => ({ id: element.id, label: boneLabel(element.id) }))
 }
 
 function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
@@ -74,11 +82,13 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [boneOptions] = useState(() => boneOptionsFromSvg(skeletonFront))
+  const [boneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'bone'))
+  const [zoneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'zone'))
   const sheetRef = useRef<HTMLDivElement | null>(null)
   const diagramRef = useRef<HTMLDivElement | null>(null)
 
-  const searchMatches = boneOptions
+  const searchOptions = selectionMode === 'bone' ? boneOptions : zoneOptions
+  const searchMatches = searchOptions
     .filter((bone) => {
       const query = searchTerm.toLowerCase()
       return bone.label.toLowerCase().includes(query) || bone.id.toLowerCase().includes(query)
@@ -98,6 +108,19 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [sheetOpen])
 
+  useEffect(() => {
+    const svg = diagramRef.current?.querySelector('svg')
+    if (!svg) return
+
+    const zoom = panzoom(svg, {
+      maxScale: 4,
+      minScale: 0.5,
+      step: 0.25,
+    })
+
+    return () => zoom.destroy()
+  }, [])
+
   // The CSS cascades the highlight from a group down onto its shapes, so the
   // class only ever needs to go on the selection itself.
   useEffect(() => {
@@ -112,15 +135,15 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     setSelected(selectionAt(event.target as Element, svg, selectionMode))
   }
 
-  function handleBoneSearch(boneId: string) {
+  function handleSearchOption(option: SearchOption) {
     const svg = diagramRef.current?.querySelector('svg')
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
-      (element) => element.id === boneId,
+      (element) => element.id === option.id,
     )
     if (!svg || !match) return
 
     setSelected(selectionAt(match, svg, selectionMode))
-    setSearchTerm(boneId)
+    setSearchTerm(option.label)
     setSheetOpen(false)
   }
 
@@ -153,11 +176,6 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
       <button type="button" onClick={() => onNavigate('export')}>
         Go to Export Page
       </button>
-      <div className="task-bar" role="toolbar" aria-label="Skeleton tools">
-        <button type="button" onClick={toggleSelectionMode}>
-          Selecting: {selectionMode === 'bone' ? 'Whole bone' : 'Bone zone'}
-        </button>
-      </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
         <div
@@ -211,17 +229,30 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
             ].join(' ')}
           >
             <div className="border-t border-slate-200 bg-white px-3 pb-3 pt-2">
+              <button
+                type="button"
+                onClick={toggleSelectionMode}
+                aria-pressed={selectionMode === 'zone'}
+                className="mb-2 flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition-colors duration-200 hover:bg-sky-50"
+              >
+                <span className="text-sm font-medium text-slate-700">Selecting</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
+                  {selectionMode === 'bone' ? 'Whole bone' : 'Bone zone'}
+                </span>
+              </button>
               <div className="search-results-scrollbar max-h-[32vh] space-y-2 overflow-y-auto">
                 {searchMatches.length > 0 ? (
                   searchMatches.map((bone) => (
                     <button
                       key={bone.id}
                       type="button"
-                      onClick={() => handleBoneSearch(bone.id)}
+                      onClick={() => handleSearchOption(bone)}
                       className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition-colors duration-200 hover:bg-sky-50"
                     >
                       <span className="text-sm font-medium text-slate-700">{bone.label}</span>
-                      <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Bone</span>
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">
+                        {selectionMode === 'bone' ? 'Bone' : 'Zone'}
+                      </span>
                     </button>
                   ))
                 ) : (

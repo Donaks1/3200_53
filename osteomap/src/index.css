@@ -84,6 +84,9 @@ input {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
 }
 
 .search-results-scrollbar {
@@ -123,44 +126,18 @@ input {
   }
 }
 
-.task-bar {
-  position: sticky;
-  bottom: 0;
-  margin-top: auto;
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-
-  button {
-    font-family: inherit;
-    font-size: 16px;
-    color: var(--text-h);
-    background: var(--social-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-  }
-}
-
 .skeleton-diagram {
-  display: flex;
   justify-content: center;
+  align-items: center;
   padding: 16px 0;
 
   svg {
     height: min(78svh, 900px);
+    max-height: 100%;
     width: auto;
     max-width: 100%;
     cursor: pointer;
+    touch-action: pan-y;
   }
 
   /* The SVG's own .front-cls-N rules set fill and stroke on each path, so a
