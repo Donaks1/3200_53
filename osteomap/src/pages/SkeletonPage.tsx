@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
-import { Search, X } from 'lucide-react'
+import { Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
 
 
 const skeletonFront = skeletonFrontSource
@@ -80,6 +80,7 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
 function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [selected, setSelected] = useState<Element | null>(null)
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
+  const [toolsOpen, setToolsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [boneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'bone'))
@@ -155,13 +156,13 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     setSelected(null)
   }
 
-  function handleSearchPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+  function handleSearchPointerDown(event: React.PointerEvent<Element>) {
     if (!sheetOpen) {
       searchSwipeStart.current = { x: event.clientX, y: event.clientY }
     }
   }
 
-  function handleSearchPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+  function handleSearchPointerUp(event: React.PointerEvent<Element>) {
     const start = searchSwipeStart.current
     searchSwipeStart.current = null
     if (!start || sheetOpen) return
@@ -199,21 +200,42 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
         <div
           ref={sheetRef}
-          className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur-md"
+          className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 p-2 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur-md"
         >
-          <div
-            className="flex w-full touch-pan-y items-center gap-3 px-3 py-3 text-left"
-            onPointerDown={handleSearchPointerDown}
-            onPointerUp={handleSearchPointerUp}
-            onPointerCancel={() => {
-              searchSwipeStart.current = null
-            }}
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-              <Search className="h-5 w-5" />
+          {toolsOpen && (
+            <div className="mb-2 grid grid-cols-3 gap-2 border-b border-slate-200 px-1 pb-2">
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-400"
+                aria-label="Undo"
+              >
+                <Undo2 className="h-4 w-4" />
+                Undo
+              </button>
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-400"
+                aria-label="Redo"
+              >
+                <Redo2 className="h-4 w-4" />
+                Redo
+              </button>
+              <button
+                type="button"
+                onClick={toggleSelectionMode}
+                aria-pressed={selectionMode === 'zone'}
+                className="rounded-2xl bg-sky-100 px-2 py-3 text-xs font-semibold text-sky-700"
+              >
+                Select: {selectionMode === 'bone' ? 'Bone' : 'Zone'}
+              </button>
             </div>
+          )}
 
-            {sheetOpen ? (
+          {sheetOpen && (
+            <div className="mb-2 flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-3">
+              <Search className="h-5 w-5 shrink-0 text-sky-700" />
               <input
                 type="search"
                 value={searchTerm}
@@ -222,30 +244,19 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
                 aria-label="Search bones"
                 className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
               />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSheetOpen(true)}
-                className="flex-1 text-left text-sm text-slate-500"
-              >
-                {searchTerm || 'Search bones...'}
-              </button>
-            )}
-
-            {sheetOpen && (
               <button
                 type="button"
                 onClick={() => {
                   setSheetOpen(false)
                   setSearchTerm('')
                 }}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-600"
                 aria-label="Close search"
               >
                 <X className="h-4 w-4" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div
             className={[
@@ -254,17 +265,6 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
             ].join(' ')}
           >
             <div className="border-t border-slate-200 bg-white px-3 pb-3 pt-2">
-              <button
-                type="button"
-                onClick={toggleSelectionMode}
-                aria-pressed={selectionMode === 'zone'}
-                className="mb-2 flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition-colors duration-200 hover:bg-sky-50"
-              >
-                <span className="text-sm font-medium text-slate-700">Selecting</span>
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
-                  {selectionMode === 'bone' ? 'Whole bone' : 'Bone zone'}
-                </span>
-              </button>
               <div className="search-results-scrollbar max-h-[32vh] space-y-2 overflow-y-auto">
                 {searchMatches.length > 0 ? (
                   searchMatches.map((bone) => (
@@ -285,6 +285,31 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setToolsOpen((open) => !open)}
+              aria-expanded={toolsOpen}
+              className="flex shrink-0 items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Tools
+            </button>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              onPointerDown={handleSearchPointerDown}
+              onPointerUp={handleSearchPointerUp}
+              onPointerCancel={() => {
+                searchSwipeStart.current = null
+              }}
+              className="flex min-w-0 flex-1 touch-pan-y items-center gap-2 rounded-2xl bg-sky-100 px-4 py-3 text-left text-sm font-medium text-sky-700"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              <span className="truncate">Search bones</span>
+            </button>
           </div>
         </div>
       </div>
