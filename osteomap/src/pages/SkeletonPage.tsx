@@ -86,6 +86,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [zoneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'zone'))
   const sheetRef = useRef<HTMLDivElement | null>(null)
   const diagramRef = useRef<HTMLDivElement | null>(null)
+  const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
 
   const searchOptions = selectionMode === 'bone' ? boneOptions : zoneOptions
   const searchMatches = searchOptions
@@ -154,6 +155,24 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     setSelected(null)
   }
 
+  function handleSearchPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!sheetOpen) {
+      searchSwipeStart.current = { x: event.clientX, y: event.clientY }
+    }
+  }
+
+  function handleSearchPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = searchSwipeStart.current
+    searchSwipeStart.current = null
+    if (!start || sheetOpen) return
+
+    const verticalDistance = start.y - event.clientY
+    const horizontalDistance = Math.abs(start.x - event.clientX)
+    if (verticalDistance > 40 && verticalDistance > horizontalDistance) {
+      setSheetOpen(true)
+    }
+  }
+
   return (
     <div className="skeleton-page">
       <p>This is the skeleton page — where the SVG diagram will sit and be edited.</p>
@@ -182,14 +201,20 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
           ref={sheetRef}
           className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/95 shadow-[0_-8px_28px_rgba(15,23,42,0.12)] backdrop-blur-md"
         >
-          <div className="flex w-full items-center gap-3 px-3 py-3 text-left">
+          <div
+            className="flex w-full touch-pan-y items-center gap-3 px-3 py-3 text-left"
+            onPointerDown={handleSearchPointerDown}
+            onPointerUp={handleSearchPointerUp}
+            onPointerCancel={() => {
+              searchSwipeStart.current = null
+            }}
+          >
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
               <Search className="h-5 w-5" />
             </div>
 
             {sheetOpen ? (
               <input
-                autoFocus
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
