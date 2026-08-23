@@ -23,8 +23,13 @@ export async function updateSite(siteId: string, siteName: string): Promise<void
 }
 
 export async function deleteSite(siteId: string): Promise<void> {
-    //Should the delete operation also cascade to contexts and cases associated with the site? 
-    // This is a design decision that needs to be made based on the application's requirements. 
+  const contexts = await db.contexts.where('siteId').equals(siteId).toArray();
 
-    await db.sites.delete(siteId);
+  for (const context of contexts) {
+    const cases = await db.cases.where('contextId').equals(context.contextId).toArray();
+    await db.cases.bulkDelete(cases.map((c) => c.caseId));
+  }
+
+  await db.contexts.bulkDelete(contexts.map((c) => c.contextId));
+  await db.sites.delete(siteId);
 }
