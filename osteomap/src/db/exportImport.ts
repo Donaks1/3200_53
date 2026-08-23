@@ -29,7 +29,7 @@ export async function exportSingleCase(caseId: string): Promise<void> {
                 return false;
             }
         });
-        saveAs(blob, `osteomap_case_${caseId}.json`);
+        saveAs(blob, `osteomap_case_${caseRecord.caseName}.json`);
     } catch (error) {
         console.error("Error exporting single case:", error);
     }
