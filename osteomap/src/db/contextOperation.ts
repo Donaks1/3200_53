@@ -24,5 +24,8 @@ export async function updateContext(contextId: string, contextName: string): Pro
 }
 
 export async function deleteContext(contextId: string): Promise<void> {
-    await db.contexts.delete(contextId);
+  const cases = await db.cases.where('contextId').equals(contextId).toArray();
+  await db.cases.bulkDelete(cases.map((c) => c.caseId));
+
+  await db.contexts.delete(contextId);
 }
