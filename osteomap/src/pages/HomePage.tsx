@@ -1,183 +1,137 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { NavigateFn } from './types'
-
-type Specimen = { id: string; name: string }
-type Context = { id: string; name: string; specimens: Specimen[] }
-type Site = { id: string; name: string; contexts: Context[] }
-
-
-const initialSites: Site[] = [
-  {
-    id: 's1',
-    name: 'Site 1',
-    contexts: [
-      {
-        id: 'c1',
-        name: 'Context 1',
-        specimens: [
-          { id: 'sp1', name: 'Specimen 1' },
-          { id: 'sp2', name: 'Specimen 2' },
-        ],
-      },
-      { id: 'c2', name: 'Context 2', specimens: [] },
-    ],
-  },
-  {
-    id: 's2',
-    name: 'Site 2',
-    contexts: [],
-  },
-]
+import { createSite, getAllSites, updateSite, deleteSite } from '../db/siteOperation'
+import { createContext, getContextsBySiteId, updateContext, deleteContext } from '../db/contextOperation'
+import { createCase, getCasesByContext, updateCaseMetadata, deleteCase } from '../db/caseOperation'
+import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/types'
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
-  const [sites, setSites] = useState<Site[]>(initialSites)
+  const [sites, setSites] = useState<SiteRecord[]>([])
+  const [contexts, setContexts] = useState<ContextRecord[]>([])
+  const [cases, setCases] = useState<CaseRecord[]>([])
+
   const [siteId, setSiteId] = useState<string | null>(null)
   const [contextId, setContextId] = useState<string | null>(null)
-  const [specimenId, setSpecimenId] = useState<string | null>(null)
+  const [caseId, setCaseId] = useState<string | null>(null)
 
-  const currentSite = sites.find((s) => s.id === siteId)
-  const currentContext = currentSite?.contexts.find((c) => c.id === contextId)
-  const currentSpecimen = currentContext?.specimens.find((sp) => sp.id === specimenId)
+  const currentSite = sites.find((s) => s.siteId === siteId)
+  const currentContext = contexts.find((c) => c.contextId === contextId)
+  const currentCase = cases.find((cas) => cas.caseId === caseId)
 
+  useEffect(() => {
+    getAllSites().then(setSites)
+  }, [])
+
+  useEffect(() => {
+    if (!siteId) return setContexts([])
+    getContextsBySiteId(siteId).then(setContexts)
+  }, [siteId])
+
+  useEffect(() => {
+    if (!contextId) return setCases([])
+    getCasesByContext(contextId).then(setCases)
+  }, [contextId])
 
   // --- Site buttons ---
-  function addSite() {
+  async function addSite() {
     const name = window.prompt('Site name?')
     if (!name) return
-    setSites([...sites, { id: Date.now().toString(), name, contexts: [] }])
+    const site = await createSite(name)
+    setSites((prev) => [...prev, site])
   }
 
-  function editSite(id: string) {
-    const site = sites.find((s) => s.id === id)
-    const name = window.prompt('Rename site', site?.name)
+  async function editSite(id: string) {
+    const site = sites.find((s) => s.siteId === id)
+    const name = window.prompt('Rename site', site?.siteName)
     if (!name) return
-    setSites(sites.map((s) => (s.id === id ? { ...s, name } : s)))
+    await updateSite(id, name)
+    setSites((prev) => prev.map((s) => (s.siteId === id ? { ...s, siteName: name } : s)))
   }
 
-  function deleteSite(id: string) {
+  async function removeSite(id: string) {
     if (!window.confirm('Delete this site?')) return
-    setSites(sites.filter((s) => s.id !== id))
+    await deleteSite(id)
+    setSites((prev) => prev.filter((s) => s.siteId !== id))
     if (siteId === id) {
       setSiteId(null)
       setContextId(null)
-      setSpecimenId(null)
+      setCaseId(null)
     }
   }
 
 
 
   // --- Context buttons ---
-  function addContext() {
+  async function addContext() {
     if (!currentSite) return
     const name = window.prompt('Context name?')
     if (!name) return
-    const newContext = { id: Date.now().toString(), name, specimens: [] }
-    setSites(
-      sites.map((s) =>
-        s.id === currentSite.id ? { ...s, contexts: [...s.contexts, newContext] } : s,
-      ),
-    )
+    const newContext = await createContext(name, currentSite.siteId)
+    setContexts((prev) => [...prev, newContext])
   }
 
-  function editContext(id: string) {
+  async function editContext(id: string) {
     if (!currentSite) return
-    const ctx = currentSite.contexts.find((c) => c.id === id)
-    const name = window.prompt('Rename context', ctx?.name)
+    const ctx = contexts.find((c) => c.contextId === id)
+    const name = window.prompt('Rename context', ctx?.contextName)
     if (!name) return
-    setSites(
-      sites.map((s) =>
-        s.id !== currentSite.id
-          ? s
-          : { ...s, contexts: s.contexts.map((c) => (c.id === id ? { ...c, name } : c)) },
-      ),
-    )
+    await updateContext(id, name)
+    setContexts((prev) => prev.map((c) => (c.contextId === id ? { ...c, contextName: name } : c)))
   }
 
   
-  function deleteContext(id: string) {
+  async function removeContext(id: string) {
     if (!currentSite) return
     if (!window.confirm('Delete this context?')) return
-    setSites(
-      sites.map((s) =>
-        s.id !== currentSite.id ? s : { ...s, contexts: s.contexts.filter((c) => c.id !== id) },
-      ),
-    )
+    await deleteContext(id)
+    setContexts((prev) => prev.filter((c) => c.contextId !== id))
     if (contextId === id) {
       setContextId(null)
-      setSpecimenId(null)
+      setCaseId(null)
     }
   }
 
 
 
-  //Specimen buttons
-  function addSpecimen() {
+  //Case buttons
+  async function addCase() {
     if (!currentSite || !currentContext) return
-    const name = window.prompt('Specimen name?')
+    const name = window.prompt('Case name?')
     if (!name) return
-    const newSpecimen = { id: Date.now().toString(), name }
-    setSites(
-      sites.map((s) =>
-        s.id !== currentSite.id
-          ? s
-          : {
-              ...s,
-              contexts: s.contexts.map((c) =>
-                c.id === currentContext.id ? { ...c, specimens: [...c.specimens, newSpecimen] } : c,
-              ),
-            },
-      ),
-    )
+    const sex = window.prompt('Sex? (male/female/unknown)') ?? 'unknown'
+    const ageGroup = window.prompt('Age group? (infant/child/adolescent/adult)') as AgeGroup
+
+
+    const newCase = await createCase(currentContext.contextId, { caseName: name, sex, ageGroup })
+    setCases((prev) => [...prev, newCase])
   }
 
-  function editSpecimen(id: string) {
+  async function editCase(id: string) {
     if (!currentSite || !currentContext) return
-    const spec = currentContext.specimens.find((sp) => sp.id === id)
-    const name = window.prompt('Rename specimen', spec?.name)
+    const caseItem = cases.find((c) => c.caseId === id)
+    const name = window.prompt('Rename case', caseItem?.caseName)
+    const sex = window.prompt('Sex? (male/female/unknown)', caseItem?.sex) ?? 'unknown'
+    const ageGroup = window.prompt('Age group? (infant/child/adolescent/adult)', caseItem?.ageGroup) as AgeGroup
     if (!name) return
-    setSites(
-      sites.map((s) =>
-        s.id !== currentSite.id
-          ? s
-          : {
-              ...s,
-              contexts: s.contexts.map((c) =>
-                c.id !== currentContext.id
-                  ? c
-                  : { ...c, specimens: c.specimens.map((sp) => (sp.id === id ? { ...sp, name } : sp)) },
-              ),
-            },
-      ),
-    )
+    await updateCaseMetadata(id, { caseName: name, sex, ageGroup })
+    setCases((prev) => prev.map((c) => (c.caseId === id ? { ...c, caseName: name, sex, ageGroup } : c)))
   }
 
-  function deleteSpecimen(id: string) {
+  async function removeCase(id: string) {
     if (!currentSite || !currentContext) return
-    if (!window.confirm('Delete this specimen?')) return
-    setSites(
-      sites.map((s) =>
-        s.id !== currentSite.id
-          ? s
-          : {
-              ...s,
-              contexts: s.contexts.map((c) =>
-                c.id !== currentContext.id
-                  ? c
-                  : { ...c, specimens: c.specimens.filter((sp) => sp.id !== id) },
-              ),
-            },
-      ),
-    )
-    if (specimenId === id) setSpecimenId(null)
+    if (!window.confirm('Delete this case?')) return
+    await deleteCase(id)
+    setCases((prev) => prev.filter((c) => c.caseId !== id))
+    if (caseId === id) setCaseId(null)
   }
 
   return (
     <div className="p-4">
       <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
       <p className="text-sm text-gray-500 mb-4">
-        {currentSite?.name}
-        {currentContext ? ' > ' + currentContext.name : ''}
-        {currentSpecimen ? ' > ' + currentSpecimen.name : ''}
+        {currentSite?.siteName}
+        {currentContext ? ' > ' + currentContext.contextName : ''}
+        {currentCase ? ' > ' + currentCase.caseName : ''}
       </p>
 
 
@@ -191,24 +145,24 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             </button>
           </div>
           {sites.map((s) => (
-            <div key={s.id} className="flex items-center gap-1 mb-1">
+            <div key={s.siteId} className="flex items-center gap-1 mb-1">
               <button
                 className={
                   'flex-1 text-left px-2 py-1 border ' +
-                  (s.id === siteId ? 'bg-gray-200' : '')
+                  (s.siteId === siteId ? 'bg-gray-200' : '')
                 }
                 onClick={() => {
-                  setSiteId(s.id)
+                  setSiteId(s.siteId)
                   setContextId(null)
-                  setSpecimenId(null)
+                  setCaseId(null)
                 }}
               >
-                {s.name}
+                {s.siteName}
               </button>
-              <button className="text-sm" onClick={() => editSite(s.id)}>
+              <button className="text-sm" onClick={() => editSite(s.siteId)}>
                 Edit
               </button>
-              <button className="text-sm" onClick={() => deleteSite(s.id)}>
+              <button className="text-sm" onClick={() => removeSite(s.siteId)}>
                 Del
               </button>
             </div>
@@ -225,24 +179,24 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             </button>
           </div>
           {!currentSite && <p className="text-sm text-gray-400">pick a site first</p>}
-          {currentSite?.contexts.map((c) => (
-            <div key={c.id} className="flex items-center gap-1 mb-1">
+          {contexts.map((c) => (
+            <div key={c.contextId} className="flex items-center gap-1 mb-1">
               <button
                 className={
                   'flex-1 text-left px-2 py-1 border ' +
-                  (c.id === contextId ? 'bg-gray-200' : '')
+                  (c.contextId === contextId ? 'bg-gray-200' : '')
                 }
                 onClick={() => {
-                  setContextId(c.id)
-                  setSpecimenId(null)
+                  setContextId(c.contextId)
+                  setCaseId(null)
                 }}
               >
-                {c.name}
+                {c.contextName}
               </button>
-              <button className="text-sm" onClick={() => editContext(c.id)}>
+              <button className="text-sm" onClick={() => editContext(c.contextId)}>
                 Edit
               </button>
-              <button className="text-sm" onClick={() => deleteContext(c.id)}>
+              <button className="text-sm" onClick={() => removeContext(c.contextId)}>
                 Del
               </button>
             </div>
@@ -255,26 +209,26 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         <div className="flex-1 border border-gray-300 rounded p-2">
           <div className="flex justify-between items-center mb-2">
             <b>Specimen</b>
-            <button className="border px-2 text-sm" onClick={addSpecimen} disabled={!currentContext}>
+            <button className="border px-2 text-sm" onClick={addCase} disabled={!currentContext}>
               + Add
             </button>
           </div>
           {!currentContext && <p className="text-sm text-gray-400">pick a context first</p>}
-          {currentContext?.specimens.map((sp) => (
-            <div key={sp.id} className="flex items-center gap-1 mb-1">
+          {cases.map((cas) => (
+            <div key={cas.caseId} className="flex items-center gap-1 mb-1">
               <button
                 className={
                   'flex-1 text-left px-2 py-1 border ' +
-                  (sp.id === specimenId ? 'bg-gray-200' : '')
+                  (cas.caseId === caseId ? 'bg-gray-200' : '')
                 }
-                onClick={() => setSpecimenId(sp.id)}
+                onClick={() => setCaseId(cas.caseId)}
               >
-                {sp.name}
+                {cas.caseName}
               </button>
-              <button className="text-sm" onClick={() => editSpecimen(sp.id)}>
+              <button className="text-sm" onClick={() => editCase(cas.caseId)}>
                 Edit
               </button>
-              <button className="text-sm" onClick={() => deleteSpecimen(sp.id)}>
+              <button className="text-sm" onClick={() => removeCase(cas.caseId)}>
                 Del
               </button>
             </div>
@@ -287,15 +241,15 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
       <div className="mt-6 flex gap-2">
         <button
           className="border px-3 py-1"
-          disabled={!currentSpecimen}
-          onClick={() => onNavigate('skeleton')}
+          disabled={!currentCase}
+          onClick={() => currentCase && onNavigate('skeleton', currentCase.caseId)}
         >
           Go to Skeleton Page
         </button>
         <button
           className="border px-3 py-1"
-          disabled={!currentSpecimen}
-          onClick={() => onNavigate('export')}
+          disabled={!currentCase}
+          onClick={() => currentCase && onNavigate('export', currentCase.caseId)}
         >
           Go to Export Page
         </button>

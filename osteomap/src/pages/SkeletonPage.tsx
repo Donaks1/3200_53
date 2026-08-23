@@ -3,6 +3,8 @@ import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import { Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
+import { getCase, updateSegmentState } from '../db/caseOperation'
+import type { CaseRecord, SegmentState } from '../db/types'
 
 
 const skeletonFront = skeletonFrontSource
@@ -77,7 +79,7 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
     .map((element) => ({ id: element.id, label: boneLabel(element.id) }))
 }
 
-function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
+function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
   const [selected, setSelected] = useState<Element | null>(null)
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -85,6 +87,7 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [boneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'bone'))
   const [zoneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'zone'))
+  const [caseData, setCaseData] = useState<CaseRecord | null>(null)
   const sheetRef = useRef<HTMLDivElement | null>(null)
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
@@ -97,6 +100,19 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
       return bone.label.toLowerCase().includes(query) || bone.id.toLowerCase().includes(query)
     })
     .slice(0, 50)
+
+  // Load the case saved data on mount
+  useEffect(() => {
+    getCase(caseId).then((data) => setCaseData(data ?? null))
+  }, [caseId])
+
+  useEffect(() => {
+    const svg = diagramRef.current?.querySelector('svg')
+    if (!svg || !caseData) return
+    for (const [segmentId, state] of Object.entries(caseData.segmentStates)) {
+      svg.querySelector(`#${segmentId}`)?.setAttribute('data-state', state)
+    }
+  }, [caseData])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -132,10 +148,16 @@ function SkeletonPage({ onNavigate }: { onNavigate: NavigateFn }) {
     return () => selected.classList.remove('is-selected')
   }, [selected])
 
-  function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
+  async function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
     const svg = event.currentTarget.querySelector('svg')
     if (!svg) return
-    setSelected(selectionAt(event.target as Element, svg, selectionMode))
+    const target = selectionAt(event.target as Element, svg, selectionMode)
+    setSelected(target)
+
+    if (target?.id && caseData) {
+      const stateToSave: SegmentState = 'complete' // Default state for demonstration; replace with actual logic as needed
+      await updateSegmentState(caseId, target.id, stateToSave)
+    }
   }
 
   function handleSearchOption(option: SearchOption) {

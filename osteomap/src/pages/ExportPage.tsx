@@ -1,15 +1,28 @@
+import { useEffect, useState } from 'react'
 import type { NavigateFn } from './types'
 import './ExportPage.css' // Import the separate CSS file
+import { getCase } from '../db/caseOperation'
+import { getContextById } from '../db/contextOperation'
+import { getSiteById } from '../db/siteOperation'
+import { exportDatabase, exportSingleCase } from '../db/exportImport'
+import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
 
-function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
-  // Mock metadata representing active case details (added in this step)
-  const activeCase = {
-    siteCode: "UWA_2026",
-    context: "Room_B_Spillway",
-    skeletonId: "SK_053",
-    lastModified: "12 Aug 2026",
-    zonesRecorded: 42
-  };
+function ExportPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
+  const [caseData, setCaseData] = useState<CaseRecord | null>(null)
+  const [context, setContext] = useState<ContextRecord | null>(null)
+  const [site, setSite] = useState<SiteRecord | null>(null)
+
+  useEffect(() => {
+    getCase(caseId).then(async (c) => {
+      setCaseData(c ?? null)
+      if (!c) return
+      const ctx = await getContextById(c.contextId)
+      setContext(ctx ?? null)
+      if (ctx) setSite((await getSiteById(ctx.siteId)) ?? null)
+    })
+  }, [caseId])
+
+  const zonesRecorded = caseData ? Object.keys(caseData.segmentStates).length : 0
 
   return (
     <div className="export-page">
@@ -17,7 +30,7 @@ function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
       <header className="export-header">
         <button 
           type="button"
-          onClick={() => onNavigate('skeleton')}
+          onClick={() => onNavigate('skeleton', caseId)}
           className="export-header-back"
         >
           ← Back
@@ -38,12 +51,16 @@ function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
         {/* Case Details Box */}
         <div className="export-card">
           <h2 className="export-card-title">Active Case Data</h2>
-          <ul className="export-card-list">
-            <li><strong>Site Code:</strong> {activeCase.siteCode}</li>
-            <li><strong>Context:</strong> {activeCase.context}</li>
-            <li><strong>Skeleton ID:</strong> {activeCase.skeletonId}</li>
-            <li><strong>Bones Recorded:</strong> {activeCase.zonesRecorded}</li>
-          </ul>
+          {caseData ? (
+            <ul className="export-card-list">
+              <li><strong>Site Code:</strong> {site?.siteName}</li>
+              <li><strong>Context:</strong> {context?.contextName}</li>
+              <li><strong>Skeleton ID:</strong> {caseData.caseName}</li>
+              <li><strong>Bones Recorded:</strong> {zonesRecorded}</li>
+            </ul>
+          ) : (
+            <p>Loading case data...</p>
+          )}
         </div>
 
         {/* Warning text placeholder */}
@@ -51,13 +68,12 @@ function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
           * Reminder: Local storage data is temporary. Please back up your records.
         </p>
 
-        {/* Basic Button (unpolished styling, ready for future responsive improvements) */}
-        <div style={{ marginTop: '24px' }}>
-          <button 
-            type="button"
-            className="export-button-basic"
-          >
-            Export as CSV (Placeholder Action)
+        <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+          <button type="button" className="export-button-basic" disabled={!caseData} onClick={() => caseData && exportSingleCase(caseData.caseId)}>
+            Export This Case (JSON)
+          </button>
+          <button type="button" className="export-button-basic" onClick={() => exportDatabase()}>
+            Export Full Backup (JSON)
           </button>
         </div>
 

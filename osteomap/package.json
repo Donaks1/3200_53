@@ -12,6 +12,7 @@
   "dependencies": {
     "@panzoom/panzoom": "^4.6.2",
     "dexie": "^4.4.5",
+    "dexie-export-import": "^4.4.0",
     "dexie-react-hooks": "^4.4.0",
     "file-saver": "^2.0.5",
     "jspdf": "^4.2.1",
