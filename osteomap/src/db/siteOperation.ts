@@ -1,9 +1,10 @@
 import { db } from "./db";
 import type { SiteRecord } from "./types";
+import { createId } from "./id";
 
 export async function createSite(siteName: string): Promise<SiteRecord> {
     const site: SiteRecord = {
-        siteId: crypto.randomUUID(),
+        siteId: createId(),
         siteName,
     };
     await db.sites.add(site);
