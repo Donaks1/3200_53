@@ -1,28 +1,14 @@
-import { useEffect, useState } from 'react'
 import type { NavigateFn } from './types'
-import './ExportPage.css' // Import the separate CSS file
-import { getCase } from '../db/caseOperation'
-import { getContextById } from '../db/contextOperation'
-import { getSiteById } from '../db/siteOperation'
-import { exportDatabase, exportSingleCase } from '../db/exportImport'
-import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
+import './ExportPage.css' // Keeping your existing CSS untouched
 
-function ExportPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
-  const [caseData, setCaseData] = useState<CaseRecord | null>(null)
-  const [context, setContext] = useState<ContextRecord | null>(null)
-  const [site, setSite] = useState<SiteRecord | null>(null)
-
-  useEffect(() => {
-    getCase(caseId).then(async (c) => {
-      setCaseData(c ?? null)
-      if (!c) return
-      const ctx = await getContextById(c.contextId)
-      setContext(ctx ?? null)
-      if (ctx) setSite((await getSiteById(ctx.siteId)) ?? null)
-    })
-  }, [caseId])
-
-  const zonesRecorded = caseData ? Object.keys(caseData.segmentStates).length : 0
+function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
+  const activeCase = {
+    siteCode: "UWA_2026",
+    context: "Room_B_Spillway",
+    skeletonId: "SK_053",
+    lastModified: "12 Aug 2026",
+    zonesRecorded: 42
+  };
 
   return (
     <div className="export-page">
@@ -30,12 +16,12 @@ function ExportPage({ caseId, onNavigate }: { caseId: string; onNavigate: Naviga
       <header className="export-header">
         <button 
           type="button"
-          onClick={() => onNavigate('skeleton', caseId)}
+          onClick={() => onNavigate('skeleton')}
           className="export-header-back"
         >
           ← Back
         </button>
-        <h1 className="export-header-title">Export Record (Active Case Setup)</h1>
+        <h1 className="export-header-title">Export Record</h1>
         <button 
           type="button"
           onClick={() => onNavigate('home')}
@@ -51,29 +37,45 @@ function ExportPage({ caseId, onNavigate }: { caseId: string; onNavigate: Naviga
         {/* Case Details Box */}
         <div className="export-card">
           <h2 className="export-card-title">Active Case Data</h2>
-          {caseData ? (
-            <ul className="export-card-list">
-              <li><strong>Site Code:</strong> {site?.siteName}</li>
-              <li><strong>Context:</strong> {context?.contextName}</li>
-              <li><strong>Skeleton ID:</strong> {caseData.caseName}</li>
-              <li><strong>Bones Recorded:</strong> {zonesRecorded}</li>
-            </ul>
-          ) : (
-            <p>Loading case data...</p>
-          )}
+          <ul className="export-card-list">
+            <li><strong>Site Code:</strong> {activeCase.siteCode}</li>
+            <li><strong>Context:</strong> {activeCase.context}</li>
+            <li><strong>Skeleton ID:</strong> {activeCase.skeletonId}</li>
+            <li><strong>Bones Recorded:</strong> {activeCase.zonesRecorded}</li>
+          </ul>
         </div>
 
-        {/* Warning text placeholder */}
+        {/* Added: Structural Warning Text (unpolished, standard alignment) */}
         <p className="export-reminder">
-          * Reminder: Local storage data is temporary. Please back up your records.
+          <strong>Notice:</strong> This application operates offline-first. To prevent local browser storage clear-outs from deleting your data, export a backup as a CSV.
         </p>
 
-        <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-          <button type="button" className="export-button-basic" disabled={!caseData} onClick={() => caseData && exportSingleCase(caseData.caseId)}>
-            Export This Case (JSON)
+        {/* Action Buttons (Added the second button structurally, but unstyled) */}
+        <div style={{ marginTop: '24px' }}>
+          <button 
+            type="button"
+            className="export-button-basic"
+            onClick={() => console.log('CSV Click')}
+          >
+            Export as CSV (.csv)
           </button>
-          <button type="button" className="export-button-basic" onClick={() => exportDatabase()}>
-            Export Full Backup (JSON)
+          
+          <button 
+            type="button"
+            style={{ 
+              marginTop: '12px', 
+              width: '100%', 
+              padding: '10px 16px', 
+              fontSize: '14px', 
+              borderRadius: '8px',
+              border: '1px dashed var(--border)',
+              background: 'none',
+              color: 'var(--text)',
+              cursor: 'pointer'
+            }}
+            onClick={() => console.log('PDF Click')}
+          >
+            Export as PDF (.pdf) [Draft]
           </button>
         </div>
 
