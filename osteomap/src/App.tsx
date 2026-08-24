@@ -6,10 +6,16 @@ import type { Page } from './pages/types'
 
 function App() {
   const [page, setPage] = useState<Page>('home')
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
 
-  if (page === 'skeleton') return <SkeletonPage onNavigate={setPage} />
-  if (page === 'export') return <ExportPage onNavigate={setPage} />
-  return <HomePage onNavigate={setPage} />
+  function handleNavigate(nextPage: Page, caseId?: string) {
+    if (caseId) setActiveCaseId(caseId)
+    setPage(nextPage)
+  }
+
+  if (page === 'skeleton' && activeCaseId) return <SkeletonPage caseId={activeCaseId} onNavigate={handleNavigate} />
+  if (page === 'export' && activeCaseId) return <ExportPage caseId={activeCaseId} onNavigate={handleNavigate} />
+  return <HomePage onNavigate={handleNavigate} />
 }
 
 export default App
