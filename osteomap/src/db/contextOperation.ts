@@ -1,9 +1,10 @@
 import { db } from "./db";
 import type { ContextRecord } from "./types";
+import { createId } from "./id";
 
 export async function createContext(contextName: string, siteId: string): Promise<ContextRecord> {
     const context: ContextRecord = {
-        contextId: crypto.randomUUID(),
+        contextId: createId(),
         contextName,
         siteId,
     };

@@ -10,6 +10,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [contexts, setContexts] = useState<ContextRecord[]>([])
   const [cases, setCases] = useState<CaseRecord[]>([])
 
+  const [newSiteName, setNewSiteName] = useState('')
+  const [newContextName, setNewContextName] = useState('')
+  const [newCaseName, setNewCaseName] = useState('')
+  const [newCaseSex, setNewCaseSex] = useState('unknown')
+  const [newCaseAgeGroup, setNewCaseAgeGroup] = useState<AgeGroup>('adult')
+
   const [siteId, setSiteId] = useState<string | null>(null)
   const [contextId, setContextId] = useState<string | null>(null)
   const [caseId, setCaseId] = useState<string | null>(null)
@@ -34,10 +40,11 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
   // --- Site buttons ---
   async function addSite() {
-    const name = window.prompt('Site name?')
+    const name = newSiteName.trim()
     if (!name) return
     const site = await createSite(name)
     setSites((prev) => [...prev, site])
+    setNewSiteName('')
   }
 
   async function editSite(id: string) {
@@ -64,10 +71,11 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   // --- Context buttons ---
   async function addContext() {
     if (!currentSite) return
-    const name = window.prompt('Context name?')
+    const name = newContextName.trim()
     if (!name) return
     const newContext = await createContext(name, currentSite.siteId)
     setContexts((prev) => [...prev, newContext])
+    setNewContextName('')
   }
 
   async function editContext(id: string) {
@@ -95,15 +103,18 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
   //Case buttons
   async function addCase() {
-    if (!currentSite || !currentContext) return
-    const name = window.prompt('Case name?')
+    if (!currentContext) return
+    const name = newCaseName.trim()
     if (!name) return
-    const sex = window.prompt('Sex? (male/female/unknown)') ?? 'unknown'
-    const ageGroup = window.prompt('Age group? (infant/child/adolescent/adult)') as AgeGroup
+    const sex = newCaseSex
+    const ageGroup = newCaseAgeGroup
 
 
     const newCase = await createCase(currentContext.contextId, { caseName: name, sex, ageGroup })
     setCases((prev) => [...prev, newCase])
+    setNewCaseName('')
+    setNewCaseSex('unknown')
+    setNewCaseAgeGroup('adult')
   }
 
   async function editCase(id: string) {
@@ -144,6 +155,20 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               + Add
             </button>
           </div>
+          <input
+            type="text"
+            value={newSiteName}
+            onChange={(event) => setNewSiteName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void addSite()
+              }
+            }}
+            className="mb-2 w-full border px-2 py-1 text-sm"
+            placeholder="Enter site name"
+            aria-label="Site name"
+          />
           {sites.map((s) => (
             <div key={s.siteId} className="flex items-center gap-1 mb-1">
               <button
@@ -178,6 +203,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               + Add
             </button>
           </div>
+          <input
+            type="text"
+            value={newContextName}
+            onChange={(event) => setNewContextName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void addContext()
+              }
+            }}
+            className="mb-2 w-full border px-2 py-1 text-sm disabled:bg-gray-100"
+            placeholder="Enter context name"
+            aria-label="Context name"
+            disabled={!currentSite}
+          />
           {!currentSite && <p className="text-sm text-gray-400">pick a site first</p>}
           {contexts.map((c) => (
             <div key={c.contextId} className="flex items-center gap-1 mb-1">
@@ -212,6 +252,46 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             <button className="border px-2 text-sm" onClick={addCase} disabled={!currentContext}>
               + Add
             </button>
+          </div>
+          <input
+            type="text"
+            value={newCaseName}
+            onChange={(event) => setNewCaseName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void addCase()
+              }
+            }}
+            className="mb-2 w-full border px-2 py-1 text-sm disabled:bg-gray-100"
+            placeholder="Enter specimen ID"
+            aria-label="Specimen ID"
+            disabled={!currentContext}
+          />
+          <div className="mb-2 flex gap-2">
+            <select
+              value={newCaseSex}
+              onChange={(event) => setNewCaseSex(event.target.value)}
+              className="w-full border px-2 py-1 text-sm disabled:bg-gray-100"
+              aria-label="Specimen sex"
+              disabled={!currentContext}
+            >
+              <option value="unknown">unknown</option>
+              <option value="female">female</option>
+              <option value="male">male</option>
+            </select>
+            <select
+              value={newCaseAgeGroup}
+              onChange={(event) => setNewCaseAgeGroup(event.target.value as AgeGroup)}
+              className="w-full border px-2 py-1 text-sm disabled:bg-gray-100"
+              aria-label="Specimen age group"
+              disabled={!currentContext}
+            >
+              <option value="infant">infant</option>
+              <option value="child">child</option>
+              <option value="adolescent">adolescent</option>
+              <option value="adult">adult</option>
+            </select>
           </div>
           {!currentContext && <p className="text-sm text-gray-400">pick a context first</p>}
           {cases.map((cas) => (
