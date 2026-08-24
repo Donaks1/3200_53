@@ -1,9 +1,10 @@
 import { db } from "./db";
 import type { CaseRecord, NewCaseRecord } from "./types";
+import { createId } from "./id";
 
 export async function createCase(contextId: string, input: NewCaseRecord): Promise<CaseRecord> {
     const newCase: CaseRecord = {
-        caseId: crypto.randomUUID(),
+        caseId: createId(),
         contextId,
         dateCreated: new Date().toISOString(),
         dateModified: new Date().toISOString(),
