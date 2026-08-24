@@ -209,7 +209,6 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   return (
     <div className="skeleton-page">
-      <p>This is the skeleton page — where the SVG diagram will sit and be edited.</p>
       <p aria-live="polite">
         {selected
           ? `Selected: ${selectionLabel(selected)}`
