@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
-import { Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
+import { CheckCheck, Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
 import { getCase, updateSegmentState } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
 
@@ -80,11 +80,12 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
 }
 
 function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
-  const [selected, setSelected] = useState<Element | null>(null)
+  const [selected, setSelected] = useState<Element[]>([])
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [toolsOpen, setToolsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  //important list of the bones found in the SVG.
   const [boneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'bone'))
   const [zoneOptions] = useState(() => searchOptionsFromSvg(skeletonFront, 'zone'))
   const [caseData, setCaseData] = useState<CaseRecord | null>(null)
@@ -143,16 +144,15 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   // The CSS cascades the highlight from a group down onto its shapes, so the
   // class only ever needs to go on the selection itself.
   useEffect(() => {
-    if (!selected) return
-    selected.classList.add('is-selected')
-    return () => selected.classList.remove('is-selected')
+    selected.forEach((element) => element.classList.add('is-selected'))
+    return () => selected.forEach((element) => element.classList.remove('is-selected'))
   }, [selected])
 
   async function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
     const svg = event.currentTarget.querySelector('svg')
     if (!svg) return
     const target = selectionAt(event.target as Element, svg, selectionMode)
-    setSelected(target)
+    setSelected(target ? [target] : [])
 
     if (target?.id && caseData) {
       const stateToSave: SegmentState = 'complete' // Default state for demonstration; replace with actual logic as needed
@@ -167,7 +167,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     )
     if (!svg || !match) return
 
-    setSelected(selectionAt(match, svg, selectionMode))
+    const selectedElement = selectionAt(match, svg, selectionMode)
+    setSelected(selectedElement ? [selectedElement] : [])
     setSearchTerm(option.label)
     setSheetOpen(false)
   }
@@ -176,7 +177,21 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   // which makes it look like the toggle didn't take.
   function toggleSelectionMode() {
     setSelectionMode((mode) => (mode === 'bone' ? 'zone' : 'bone'))
-    setSelected(null)
+    setSelected([])
+  }
+
+  async function selectAllBones() {
+    const svg = diagramRef.current?.querySelector('svg')
+    if (!svg) return //If we couldn't find the SVG, stop the function
+
+    const bones = boneOptions
+      .map((bone) => svg.querySelector(`#${CSS.escape(bone.id)}`))
+      .filter((bone): bone is Element => bone !== null)
+    setSelected(bones)
+
+    if (caseData) {
+      await Promise.all(bones.map((bone) => updateSegmentState(caseId, bone.id, 'complete')))
+    }
   }
 
   function handleSearchPointerDown(event: React.PointerEvent<Element>) {
@@ -210,9 +225,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   return (
     <div className="skeleton-page">
       <p aria-live="polite">
-        {selected
-          ? `Selected: ${selectionLabel(selected)}`
-          : `Click a ${selectionMode} to select it.`}
+        {selected.length === 1
+          ? `Selected: ${selectionLabel(selected[0])}`
+          : selected.length > 1
+            ? `Selected: ${selected.length} bones`
+            : `Click a ${selectionMode} to select it.`}
       </p>
       <div
         ref={diagramRef}
@@ -240,7 +257,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
               toolsOpen ? 'max-h-24 translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0',
             ].join(' ')}
           >
-            <div className="mb-2 grid grid-cols-3 gap-2 border-b border-slate-200 px-1 pb-2">
+            <div className="mb-2 grid grid-cols-4 gap-2 border-b border-slate-200 px-1 pb-2">
               <button
                 type="button"
                 disabled
@@ -266,6 +283,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                 className="rounded-2xl bg-sky-100 px-2 py-3 text-xs font-semibold text-sky-700"
               >
                 Select: {selectionMode === 'bone' ? 'Bone' : 'Zone'}
+              </button>
+              <button
+                type="button"
+                onClick={selectAllBones}
+                disabled={selectionMode !== 'bone'}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-100 px-2 py-3 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                aria-label="Select all bones"
+              >
+                <CheckCheck className="h-4 w-4" />
+                All bones
               </button>
             </div>
           </div>
