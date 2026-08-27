@@ -163,10 +163,6 @@ input {
     stroke-width: 0.9px;
   }
 
-  .is-selected {
-    filter: drop-shadow(0 0 3px var(--accent-border));
-  }
-
   /* The picker's colour rides on the marked element as data-paint. Each state
      only names its two colours; the rules below do the painting, so a group
      hands its fill and edge down to its zones through inheritance the same way
@@ -192,9 +188,5 @@ input {
   .is-selected[data-paint] :is(path, polygon, circle, ellipse) {
     fill: var(--paint-fill);
     stroke: var(--paint-edge);
-  }
-
-  .is-selected[data-paint] {
-    filter: drop-shadow(0 0 3px var(--paint-edge));
   }
 }
