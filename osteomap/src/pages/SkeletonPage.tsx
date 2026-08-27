@@ -63,6 +63,46 @@ function selectionLabel(selected: Element) {
   return `${name} — zone ${index} of ${bone.children.length}`
 }
 
+// Switching modes keeps whatever is already lit up, so the list holds a mix of
+// bone groups and lone zone shapes. A group entry stands for every zone inside
+// it, which is what makes these three helpers more than array operations: they
+// keep exactly one entry per lit-up shape no matter which mode added it.
+
+// contains() counts the element itself, so this covers both "it's in the list"
+// and "its bone is in the list".
+function isSelected(selected: Element[], element: Element) {
+  return selected.some((entry) => entry.contains(element))
+}
+
+// Selecting a whole bone subsumes any of its zones already in the list.
+function withSelection(selected: Element[], element: Element) {
+  if (isSelected(selected, element)) return selected
+  return [...selected.filter((entry) => !element.contains(entry)), element]
+}
+
+// Switching one zone off is the hard direction: if its bone is in the list as a
+// single entry, that entry has to break apart into everything under it except
+// the shape being switched off. Walking up from the shape to the entry and
+// keeping the siblings passed on the way does that at any depth, so carving a
+// zone out of l_hand > l_pollex > l_dist_pollex works the same as out of
+// l_femur.
+function withoutSelection(selected: Element[], element: Element) {
+  return selected.flatMap((entry) => {
+    if (entry === element) return []
+    if (!entry.contains(element)) return [entry]
+
+    const remainder: Element[] = []
+    let node: Element = element
+    while (node !== entry) {
+      const parent: Element | null = node.parentElement
+      if (!parent) break
+      remainder.push(...[...parent.children].filter((child) => child !== node))
+      node = parent
+    }
+    return remainder
+  })
+}
+
 type SearchOption = {
   id: string
   label: string
@@ -158,9 +198,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     const target = selectionAt(event.target as Element, svg, selectionMode)
     if (!target) return
 
-    const wasSelected = selected.includes(target)
+    const wasSelected = isSelected(selected, target)
     setSelected((current) =>
-      wasSelected ? current.filter((element) => element !== target) : [...current, target],
+      wasSelected ? withoutSelection(current, target) : withSelection(current, target),
     )
 
     // Deselecting doesn't clear the stored state yet, so only the additions are
@@ -182,19 +222,17 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // Adds to the set for the same reason a click does, so picking bones by
     // name and by tapping them can be mixed freely.
     if (selectedElement) {
-      setSelected((current) =>
-        current.includes(selectedElement) ? current : [...current, selectedElement],
-      )
+      setSelected((current) => withSelection(current, selectedElement))
     }
     setSearchTerm(option.label)
     setSheetOpen(false)
   }
 
-  // Clearing on switch avoids leaving a bone lit up while the bar reads "zone",
-  // which makes it look like the toggle didn't take.
+  // The mode decides what the *next* click picks up, not what stays lit, so the
+  // current selection carries across. Switching to zone mode is how you go back
+  // and carve individual zones out of a bone you selected whole.
   function toggleSelectionMode() {
     setSelectionMode((mode) => (mode === 'bone' ? 'zone' : 'bone'))
-    setSelected([])
   }
 
   async function selectAllBones() {
@@ -245,7 +283,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         {selected.length === 1
           ? `Selected: ${selectionLabel(selected[0])}`
           : selected.length > 1
-            ? `Selected: ${selected.length} ${selectionMode}s`
+            ? `Selected: ${selected.length} segments`
             : `Click a ${selectionMode} to select it.`}
       </p>
       <div
