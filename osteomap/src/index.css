@@ -11,6 +11,12 @@
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --bone-selected: #c77dff;
+  --paint-present: #34d399;
+  --paint-present-edge: #047857;
+  --paint-absent: #f87171;
+  --paint-absent-edge: #b91c1c;
+  --paint-fragmentary: #60a5fa;
+  --paint-fragmentary-edge: #1d4ed8;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -45,6 +51,12 @@
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
     --bone-selected: #a855f7;
+    --paint-present: #10b981;
+    --paint-present-edge: #6ee7b7;
+    --paint-absent: #ef4444;
+    --paint-absent-edge: #fca5a5;
+    --paint-fragmentary: #3b82f6;
+    --paint-fragmentary-edge: #93c5fd;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -153,5 +165,36 @@ input {
 
   .is-selected {
     filter: drop-shadow(0 0 3px var(--accent-border));
+  }
+
+  /* The picker's colour rides on the marked element as data-paint. Each state
+     only names its two colours; the rules below do the painting, so a group
+     hands its fill and edge down to its zones through inheritance the same way
+     it hands down the highlight. */
+  .is-selected[data-paint='present'] {
+    --paint-fill: var(--paint-present);
+    --paint-edge: var(--paint-present-edge);
+  }
+
+  .is-selected[data-paint='absent'] {
+    --paint-fill: var(--paint-absent);
+    --paint-edge: var(--paint-absent-edge);
+  }
+
+  .is-selected[data-paint='fragmentary'] {
+    --paint-fill: var(--paint-fragmentary);
+    --paint-edge: var(--paint-fragmentary-edge);
+  }
+
+  /* Same specificity note as above, with the attribute standing in for the
+     second class, so these still outrank the SVG's own .front-cls-N fills. */
+  .is-selected[data-paint],
+  .is-selected[data-paint] :is(path, polygon, circle, ellipse) {
+    fill: var(--paint-fill);
+    stroke: var(--paint-edge);
+  }
+
+  .is-selected[data-paint] {
+    filter: drop-shadow(0 0 3px var(--paint-edge));
   }
 }
