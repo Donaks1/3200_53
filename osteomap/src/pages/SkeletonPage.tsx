@@ -148,13 +148,24 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     return () => selected.forEach((element) => element.classList.remove('is-selected'))
   }, [selected])
 
+  // Selections build up: each click adds another bone to the lit-up set, and
+  // clicking one that is already lit takes it back out again. A click that
+  // misses the skeleton is left alone — panning the diagram shouldn't wipe out
+  // everything marked so far.
   async function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
     const svg = event.currentTarget.querySelector('svg')
     if (!svg) return
     const target = selectionAt(event.target as Element, svg, selectionMode)
-    setSelected(target ? [target] : [])
+    if (!target) return
 
-    if (target?.id && caseData) {
+    const wasSelected = selected.includes(target)
+    setSelected((current) =>
+      wasSelected ? current.filter((element) => element !== target) : [...current, target],
+    )
+
+    // Deselecting doesn't clear the stored state yet, so only the additions are
+    // written back for now.
+    if (target.id && caseData && !wasSelected) {
       const stateToSave: SegmentState = 'complete' // Default state for demonstration; replace with actual logic as needed
       await updateSegmentState(caseId, target.id, stateToSave)
     }
@@ -168,7 +179,13 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     if (!svg || !match) return
 
     const selectedElement = selectionAt(match, svg, selectionMode)
-    setSelected(selectedElement ? [selectedElement] : [])
+    // Adds to the set for the same reason a click does, so picking bones by
+    // name and by tapping them can be mixed freely.
+    if (selectedElement) {
+      setSelected((current) =>
+        current.includes(selectedElement) ? current : [...current, selectedElement],
+      )
+    }
     setSearchTerm(option.label)
     setSheetOpen(false)
   }
@@ -228,7 +245,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         {selected.length === 1
           ? `Selected: ${selectionLabel(selected[0])}`
           : selected.length > 1
-            ? `Selected: ${selected.length} bones`
+            ? `Selected: ${selected.length} ${selectionMode}s`
             : `Click a ${selectionMode} to select it.`}
       </p>
       <div
