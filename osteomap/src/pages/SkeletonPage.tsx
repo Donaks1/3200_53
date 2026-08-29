@@ -326,6 +326,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   async function selectAllBones() {
+    const label = paintLabel(activePaint)
+    const confirmed = window.confirm(
+      `Are you sure you want to mark ALL bones as "${label}"? This will overwrite current bone states.`
+    )
+    if (!confirmed) return
+
     const svg = diagramRef.current?.querySelector('svg')
     if (!svg) return
 
