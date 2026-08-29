@@ -4,21 +4,24 @@ import { createSite, getAllSites, updateSite, deleteSite } from '../db/siteOpera
 import { createContext, getContextsBySiteId, updateContext, deleteContext } from '../db/contextOperation'
 import { createCase, getCasesByContext, updateCaseMetadata, deleteCase } from '../db/caseOperation'
 import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/types'
+import TextInputPopup from '../components/TextInputPopup'
+import Metadata from '../components/Metadata'
+import type { SpecimenMetadata } from '../components/Metadata'
+
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [sites, setSites] = useState<SiteRecord[]>([])
   const [contexts, setContexts] = useState<ContextRecord[]>([])
   const [cases, setCases] = useState<CaseRecord[]>([])
-
-  const [newSiteName, setNewSiteName] = useState('')
-  const [newContextName, setNewContextName] = useState('')
-  const [newCaseName, setNewCaseName] = useState('')
-  const [newCaseSex, setNewCaseSex] = useState('unknown')
-  const [newCaseAgeGroup, setNewCaseAgeGroup] = useState<AgeGroup>('adult')
-
   const [siteId, setSiteId] = useState<string | null>(null)
   const [contextId, setContextId] = useState<string | null>(null)
   const [caseId, setCaseId] = useState<string | null>(null)
+
+  const [PopSite, setPopSite] = useState(false)
+  const [PopCxt, setPopCxt] = useState(false)
+  const [showCaseNamePopup, setShowCaseNamePopup] = useState(false)
+  const [PopMeta, setPopMeta] = useState(false)
+  const [TempName, setTempName] = useState('')
 
   const currentSite = sites.find((s) => s.siteId === siteId)
   const currentContext = contexts.find((c) => c.contextId === contextId)
@@ -38,14 +41,17 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
     getCasesByContext(contextId).then(setCases)
   }, [contextId])
 
+
   // --- Site buttons ---
-  async function addSite() {
-    const name = newSiteName.trim()
-    if (!name) return
+  async function addSite(name: string) {
     const site = await createSite(name)
     setSites((prev) => [...prev, site])
-    setNewSiteName('')
+    setSiteId(site.siteId)
+    setContextId(null)
+    setCaseId(null)
+    setPopSite(false)
   }
+
 
   async function editSite(id: string) {
     const site = sites.find((s) => s.siteId === id)
@@ -69,14 +75,15 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
   // --- Context buttons ---
-  async function addContext() {
+  async function addContext(name: string) {
     if (!currentSite) return
-    const name = newContextName.trim()
-    if (!name) return
     const newContext = await createContext(name, currentSite.siteId)
     setContexts((prev) => [...prev, newContext])
-    setNewContextName('')
+    setContextId(newContext.contextId)
+    setCaseId(null)
+    setPopCxt(false)
   }
+
 
   async function editContext(id: string) {
     if (!currentSite) return
@@ -102,31 +109,52 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
   //Case buttons
-  async function addCase() {
+  function startAddCase() {
     if (!currentContext) return
-    const name = newCaseName.trim()
-    if (!name) return
-    const sex = newCaseSex
-    const ageGroup = newCaseAgeGroup
-
-
-    const newCase = await createCase(currentContext.contextId, { caseName: name, sex, ageGroup })
-    setCases((prev) => [...prev, newCase])
-    setNewCaseName('')
-    setNewCaseSex('unknown')
-    setNewCaseAgeGroup('adult')
+    setShowCaseNamePopup(true)
   }
 
-  async function editCase(id: string) {
+
+ function handleCaseNameSave(name: string) {
+    setTempName(name)
+    setShowCaseNamePopup(false)
+    setPopMeta(true)
+  }
+
+
+  async function handleMetadataSave(metadata: SpecimenMetadata) {
+    if (!currentContext) return
+    const newCase = await createCase(currentContext.contextId, {
+      caseName: TempName,
+      ...metadata,
+    })
+    setCases((prev) => [...prev, newCase])
+    setCaseId(newCase.caseId)
+    setPopMeta(false)
+    setTempName('')
+  }
+
+
+  function cancelAddCase() {
+    setShowCaseNamePopup(false)
+    setPopMeta(false)
+    setTempName('')
+  }
+
+
+
+ async function editCase(id: string) {
     if (!currentSite || !currentContext) return
     const caseItem = cases.find((c) => c.caseId === id)
     const name = window.prompt('Rename case', caseItem?.caseName)
     const sex = window.prompt('Sex? (male/female/unknown)', caseItem?.sex) ?? 'unknown'
+
     const ageGroup = window.prompt('Age group? (infant/child/adolescent/adult)', caseItem?.ageGroup) as AgeGroup
-    if (!name) return
-    await updateCaseMetadata(id, { caseName: name, sex, ageGroup })
-    setCases((prev) => prev.map((c) => (c.caseId === id ? { ...c, caseName: name, sex, ageGroup } : c)))
+      if (!name) return
+      await updateCaseMetadata(id, { caseName: name, sex, ageGroup })
+      setCases((prev) => prev.map((c) => (c.caseId === id ? { ...c, caseName: name, sex, ageGroup } : c)))
   }
+
 
   async function removeCase(id: string) {
     if (!currentSite || !currentContext) return
@@ -151,24 +179,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         <div className="flex-1 border border-gray-300 rounded p-2">
           <div className="flex justify-between items-center mb-2">
             <b>Site</b>
-            <button className="border px-2 text-sm" onClick={addSite}>
+            <button className="border px-2 text-sm" onClick={() => setPopSite(true)}>
               + Add
             </button>
           </div>
-          <input
-            type="text"
-            value={newSiteName}
-            onChange={(event) => setNewSiteName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void addSite()
-              }
-            }}
-            className="mb-2 w-full border px-2 py-1 text-sm"
-            placeholder="Enter site name"
-            aria-label="Site name"
-          />
+          
+           
           {sites.map((s) => (
             <div key={s.siteId} className="flex items-center gap-1 mb-1">
               <button
@@ -199,25 +215,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         <div className="flex-1 border border-gray-300 rounded p-2">
           <div className="flex justify-between items-center mb-2">
             <b>Context</b>
-            <button className="border px-2 text-sm" onClick={addContext} disabled={!currentSite}>
+            <button className="border px-2 text-sm" onClick={() => setPopCxt(true)} disabled={!currentSite}>
               + Add
             </button>
           </div>
-          <input
-            type="text"
-            value={newContextName}
-            onChange={(event) => setNewContextName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void addContext()
-              }
-            }}
-            className="mb-2 w-full border px-2 py-1 text-sm disabled:bg-gray-100"
-            placeholder="Enter context name"
-            aria-label="Context name"
-            disabled={!currentSite}
-          />
+          
+
           {!currentSite && <p className="text-sm text-gray-400">pick a site first</p>}
           {contexts.map((c) => (
             <div key={c.contextId} className="flex items-center gap-1 mb-1">
@@ -227,8 +230,8 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
                   (c.contextId === contextId ? 'bg-gray-200' : '')
                 }
                 onClick={() => {
-                  setContextId(c.contextId)
-                  setCaseId(null)
+                setContextId(c.contextId)
+                setCaseId(null)
                 }}
               >
                 {c.contextName}
@@ -249,50 +252,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         <div className="flex-1 border border-gray-300 rounded p-2">
           <div className="flex justify-between items-center mb-2">
             <b>Specimen</b>
-            <button className="border px-2 text-sm" onClick={addCase} disabled={!currentContext}>
+            <button className="border px-2 text-sm" onClick={startAddCase} disabled={!currentContext}>
               + Add
             </button>
           </div>
-          <input
-            type="text"
-            value={newCaseName}
-            onChange={(event) => setNewCaseName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void addCase()
-              }
-            }}
-            className="mb-2 w-full border px-2 py-1 text-sm disabled:bg-gray-100"
-            placeholder="Enter specimen ID"
-            aria-label="Specimen ID"
-            disabled={!currentContext}
-          />
-          <div className="mb-2 flex gap-2">
-            <select
-              value={newCaseSex}
-              onChange={(event) => setNewCaseSex(event.target.value)}
-              className="w-full border px-2 py-1 text-sm disabled:bg-gray-100"
-              aria-label="Specimen sex"
-              disabled={!currentContext}
-            >
-              <option value="unknown">unknown</option>
-              <option value="female">female</option>
-              <option value="male">male</option>
-            </select>
-            <select
-              value={newCaseAgeGroup}
-              onChange={(event) => setNewCaseAgeGroup(event.target.value as AgeGroup)}
-              className="w-full border px-2 py-1 text-sm disabled:bg-gray-100"
-              aria-label="Specimen age group"
-              disabled={!currentContext}
-            >
-              <option value="infant">infant</option>
-              <option value="child">child</option>
-              <option value="adolescent">adolescent</option>
-              <option value="adult">adult</option>
-            </select>
-          </div>
+        
+          
           {!currentContext && <p className="text-sm text-gray-400">pick a context first</p>}
           {cases.map((cas) => (
             <div key={cas.caseId} className="flex items-center gap-1 mb-1">
@@ -317,6 +282,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
       </div>
 
 
+
       {/* nav buttons at bottom, just basic buttons for now */}
       <div className="mt-6 flex gap-2">
         <button
@@ -334,8 +300,44 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           Go to Export Page
         </button>
       </div>
+
+      <TextInputPopup
+        isOpen={PopSite}
+        title="New Site"
+        label="Site name"
+        placeholder="Enter site name"
+        onSave={addSite}
+        onCancel={() => setPopSite(false)}
+      />
+
+      <TextInputPopup
+        isOpen={PopCxt}
+        title="New Context"
+        label="Context name"
+        placeholder="Enter context name"
+        onSave={addContext}
+        onCancel={() => setPopCxt(false)}
+      />
+
+      <TextInputPopup
+        isOpen={showCaseNamePopup}
+        title="New Specimen"
+        label="Specimen ID"
+        placeholder="Enter specimen ID"
+        onSave={handleCaseNameSave}
+        onCancel={cancelAddCase}
+      />
+
+      <Metadata
+        isOpen={PopMeta}
+        caseName={TempName}
+        onSave={handleMetadataSave}
+        onCancel={cancelAddCase}
+      />
+
     </div>
   )
 }
+
 
 export default HomePage
