@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
-import { CheckCheck, Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCheck, List, Redo2, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
 import { getCase, updateSegmentState, removeSegmentState, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
+
 
 
 
@@ -376,52 +377,65 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   return (
-    <div className="skeleton-page relative">
-      <div className="pt-3 px-4 flex flex-col items-center">
-        {caseData && (
-          <div className="text-xs font-bold text-sky-700 uppercase tracking-wider mb-0.5">
-            {caseData.caseName}
-          </div>
-        )}
-        <p aria-live="polite" className="text-xs text-slate-600">
-          {selected.length === 1
-            ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
-            : selected.length > 1
-              ? `${selected.length} segments marked`
-              : `Click a ${selectionMode} to mark it ${paintLabel(activePaint).toLowerCase()}.`}
-        </p>
-      </div>
+    <div className="skeleton-page">
+      {/* Top Navigation & Info Header */}
+      <header className="z-20 flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 py-2 shadow-xs backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => onNavigate('home')}
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+          title="Back to Home"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Home</span>
+        </button>
+
+        <div className="flex flex-col items-center text-center px-2 min-w-0">
+          <span className="truncate text-xs font-bold uppercase tracking-wider text-sky-700">
+            {caseData?.caseName ?? 'Skeleton'}
+          </span>
+          <span aria-live="polite" className="truncate text-[11px] font-medium text-slate-500">
+            {selected.length === 1
+              ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
+              : selected.length > 1
+                ? `${selected.length} segments marked`
+                : `Tap a ${selectionMode} to mark ${paintLabel(activePaint).toLowerCase()}`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onNavigate('my-skeletons')}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+            title="My Skeletons"
+          >
+            <List className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">My Skeletons</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate('export', caseId)}
+            className="flex items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 transition-colors"
+            title="Export Record"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export</span>
+            <ArrowRight className="h-3.5 w-3.5 hidden sm:inline" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Skeleton Diagram */}
       <div
         ref={diagramRef}
-        className="skeleton-diagram flex-1"
+        className="skeleton-diagram"
         role="img"
         aria-label="Anterior view of the human skeleton"
         onClick={handleDiagramClick}
         dangerouslySetInnerHTML={skeletonFrontMarkup}
       />
-      <div className="flex justify-center gap-2 pb-24 z-10">
-        <button
-          type="button"
-          onClick={() => onNavigate('home')}
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
-        >
-          ← Home
-        </button>
-        <button
-          type="button"
-          onClick={() => onNavigate('my-skeletons')}
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
-        >
-          My Skeletons
-        </button>
-        <button
-          type="button"
-          onClick={() => onNavigate('export', caseId)}
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
-        >
-          Export →
-        </button>
-      </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
         <div

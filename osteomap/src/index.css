@@ -95,10 +95,11 @@ input {
 .skeleton-page {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 100dvh;
-  overflow-y: auto;
-  overscroll-behavior-y: auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .search-results-scrollbar {
@@ -139,12 +140,17 @@ input {
 }
 
 .skeleton-diagram {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px 0;
+  padding: 6px 8px calc(72px + env(safe-area-inset-bottom));
+  width: 100%;
+  overflow: hidden;
 
   svg {
-    height: min(78svh, 900px);
+    height: 100%;
     max-height: 100%;
     width: auto;
     max-width: 100%;

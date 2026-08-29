@@ -166,21 +166,13 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
   return (
     <div className="p-4">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
-          <p className="text-sm text-gray-500">
-            {currentSite?.siteName}
-            {currentContext ? ' > ' + currentContext.contextName : ''}
-            {currentCase ? ' > ' + currentCase.caseName : ''}
-          </p>
-        </div>
-        <button
-          className="border border-sky-600 bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
-          onClick={() => onNavigate('my-skeletons')}
-        >
-          My Skeletons
-        </button>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
+        <p className="text-sm text-gray-500">
+          {currentSite?.siteName}
+          {currentContext ? ' > ' + currentContext.contextName : ''}
+          {currentCase ? ' > ' + currentCase.caseName : ''}
+        </p>
       </div>
 
 
@@ -294,27 +286,22 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
       {/* nav buttons at bottom */}
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
-          className="border border-sky-600 bg-sky-600 text-white px-3 py-1 rounded font-medium hover:bg-sky-700 transition-colors"
+          className="border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs"
           onClick={() => onNavigate('my-skeletons')}
         >
           View All Skeletons
         </button>
-        <button
-          className="border px-3 py-1 rounded disabled:opacity-50"
-          disabled={!currentCase}
-          onClick={() => currentCase && onNavigate('skeleton', currentCase.caseId)}
-        >
-          Go to Skeleton Page
-        </button>
-        <button
-          className="border px-3 py-1 rounded disabled:opacity-50"
-          disabled={!currentCase}
-          onClick={() => currentCase && onNavigate('export', currentCase.caseId)}
-        >
-          Go to Export Page
-        </button>
+
+        {currentSite && currentContext && currentCase && (
+          <button
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-semibold transition-all shadow-sm flex items-center gap-2"
+            onClick={() => onNavigate('skeleton', currentCase.caseId)}
+          >
+            Create Skeleton →
+          </button>
+        )}
       </div>
 
       <TextInputPopup
