@@ -3,8 +3,10 @@ import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import { CheckCheck, Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
-import { getCase, updateSegmentState } from '../db/caseOperation'
+import { getCase, updateSegmentState, removeSegmentState, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
+
+
 
 
 const skeletonFront = skeletonFrontSource
@@ -33,12 +35,12 @@ const PAINT_OPTIONS: { state: PaintState; label: string; swatch: string }[] = [
 const paintLabel = (paint: PaintState) =>
   PAINT_OPTIONS.find((option) => option.state === paint)?.label ?? paint
 
-// Only the two states with a counterpart in the stored SegmentState enum are
-// written back — there is no 'fragmentary' member to save yet.
-const SEGMENT_STATE_BY_PAINT: Partial<Record<PaintState, SegmentState>> = {
+const SEGMENT_STATE_BY_PAINT: Record<PaintState, SegmentState> = {
   present: 'complete',
   absent: 'absent',
+  fragmentary: 'pathological',
 }
+
 
 // A marked segment and the colour it was marked with.
 type PaintedSegment = { element: Element; paint: PaintState }
@@ -172,18 +174,42 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     })
     .slice(0, 50)
 
-  // Load the case saved data on mount
+  // Load the case saved data on mount and pre-fill painted bones
   useEffect(() => {
-    getCase(caseId).then((data) => setCaseData(data ?? null))
-  }, [caseId])
+    let active = true
 
-  useEffect(() => {
-    const svg = diagramRef.current?.querySelector('svg')
-    if (!svg || !caseData) return
-    for (const [segmentId, state] of Object.entries(caseData.segmentStates)) {
-      svg.querySelector(`#${segmentId}`)?.setAttribute('data-state', state)
+    getCase(caseId).then((data) => {
+      if (!active || !data) return
+      setCaseData(data)
+
+      const svg = diagramRef.current?.querySelector('svg')
+      if (!svg || !data.segmentStates) return
+
+      const initialSelected: PaintedSegment[] = []
+      for (const [segmentId, state] of Object.entries(data.segmentStates)) {
+        if (!state) continue
+        try {
+          const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
+          if (element) {
+            let paint: PaintState = 'present'
+            if (state === 'absent') paint = 'absent'
+            else if (state === 'pathological') paint = 'fragmentary'
+            else if (state === 'complete') paint = 'present'
+
+            initialSelected.push({ element, paint })
+          }
+        } catch (e) {
+          console.warn(`Could not select segment #${segmentId}:`, e)
+        }
+      }
+
+      setSelected(initialSelected)
+    })
+
+    return () => {
+      active = false
     }
-  }, [caseData])
+  }, [caseId])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -245,15 +271,23 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       return erasing ? cleared : withPaint(cleared, target, activePaint)
     })
 
-    // Erasing doesn't clear the stored state yet, so only the marks are written
-    // back for now.
-    const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    if (target.id && caseData && stateToSave && !erasing) {
-      await updateSegmentState(caseId, target.id, stateToSave)
+    if (target.id) {
+      try {
+        if (erasing) {
+          await removeSegmentState(caseId, target.id)
+        } else {
+          const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
+          if (stateToSave) {
+            await updateSegmentState(caseId, target.id, stateToSave)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to update segment state in DB:', err)
+      }
     }
   }
 
-  function handleSearchOption(option: SearchOption) {
+  async function handleSearchOption(option: SearchOption) {
     const svg = diagramRef.current?.querySelector('svg')
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
       (element) => element.id === option.id,
@@ -267,6 +301,17 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       setSelected((current) =>
         withPaint(withoutPaint(current, selectedElement), selectedElement, activePaint),
       )
+
+      if (selectedElement.id) {
+        const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
+        if (stateToSave) {
+          try {
+            await updateSegmentState(caseId, selectedElement.id, stateToSave)
+          } catch (err) {
+            console.error('Failed to save segment state:', err)
+          }
+        }
+      }
     }
     setSearchTerm(option.label)
     setSheetOpen(false)
@@ -281,7 +326,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   async function selectAllBones() {
     const svg = diagramRef.current?.querySelector('svg')
-    if (!svg) return //If we couldn't find the SVG, stop the function
+    if (!svg) return
 
     const bones = boneOptions
       .map((bone) => svg.querySelector(`#${CSS.escape(bone.id)}`))
@@ -289,8 +334,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelected(bones.map((element) => ({ element, paint: activePaint })))
 
     const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    if (caseData && stateToSave) {
-      await Promise.all(bones.map((bone) => updateSegmentState(caseId, bone.id, stateToSave)))
+    if (stateToSave) {
+      try {
+        const newStates: Record<string, SegmentState> = {}
+        bones.forEach((bone) => {
+          if (bone.id) newStates[bone.id] = stateToSave
+        })
+        await setAllSegmentStates(caseId, newStates)
+      } catch (err) {
+        console.error('Failed to save all bones:', err)
+      }
     }
   }
 
@@ -323,28 +376,52 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   return (
-    <div className="skeleton-page">
-      <p aria-live="polite">
-        {selected.length === 1
-          ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
-          : selected.length > 1
-            ? `${selected.length} segments marked`
-            : `Click a ${selectionMode} to mark it ${paintLabel(activePaint).toLowerCase()}.`}
-      </p>
+    <div className="skeleton-page relative">
+      <div className="pt-3 px-4 flex flex-col items-center">
+        {caseData && (
+          <div className="text-xs font-bold text-sky-700 uppercase tracking-wider mb-0.5">
+            {caseData.caseName}
+          </div>
+        )}
+        <p aria-live="polite" className="text-xs text-slate-600">
+          {selected.length === 1
+            ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
+            : selected.length > 1
+              ? `${selected.length} segments marked`
+              : `Click a ${selectionMode} to mark it ${paintLabel(activePaint).toLowerCase()}.`}
+        </p>
+      </div>
       <div
         ref={diagramRef}
-        className="skeleton-diagram"
+        className="skeleton-diagram flex-1"
         role="img"
         aria-label="Anterior view of the human skeleton"
         onClick={handleDiagramClick}
         dangerouslySetInnerHTML={skeletonFrontMarkup}
       />
-      <button type="button" onClick={() => onNavigate('home')}>
-        Back to Home
-      </button>
-      <button type="button" onClick={() => onNavigate('export')}>
-        Go to Export Page
-      </button>
+      <div className="flex justify-center gap-2 pb-24 z-10">
+        <button
+          type="button"
+          onClick={() => onNavigate('home')}
+          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+        >
+          ← Home
+        </button>
+        <button
+          type="button"
+          onClick={() => onNavigate('my-skeletons')}
+          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+        >
+          My Skeletons
+        </button>
+        <button
+          type="button"
+          onClick={() => onNavigate('export', caseId)}
+          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+        >
+          Export →
+        </button>
+      </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
         <div

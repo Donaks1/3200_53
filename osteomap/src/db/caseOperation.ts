@@ -23,11 +23,35 @@ export async function updateSegmentState(caseId: string, segmentId: string, newS
     const existingCase = await db.cases.get(caseId);
     if (!existingCase) throw new Error("Case not found");
 
+    if (!existingCase.segmentStates) existingCase.segmentStates = {};
     existingCase.segmentStates[segmentId] = newState;
     existingCase.dateModified = new Date().toISOString();
 
     await db.cases.put(existingCase);
 }
+
+export async function removeSegmentState(caseId: string, segmentId: string): Promise<void> {
+    const existingCase = await db.cases.get(caseId);
+    if (!existingCase) throw new Error("Case not found");
+
+    if (existingCase.segmentStates) {
+        delete existingCase.segmentStates[segmentId];
+    }
+    existingCase.dateModified = new Date().toISOString();
+
+    await db.cases.put(existingCase);
+}
+
+export async function setAllSegmentStates(caseId: string, segmentStates: Record<string, CaseRecord['segmentStates'][string]>): Promise<void> {
+    const existingCase = await db.cases.get(caseId);
+    if (!existingCase) throw new Error("Case not found");
+
+    existingCase.segmentStates = segmentStates;
+    existingCase.dateModified = new Date().toISOString();
+
+    await db.cases.put(existingCase);
+}
+
 
 export async function updateCaseMetadata(caseId: string, updates: Partial<Omit<CaseRecord, 'caseId' | 'contextId' | 'segmentStates'>>): Promise<void> {
     const existingCase = await db.cases.get(caseId);
