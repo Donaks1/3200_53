@@ -166,12 +166,22 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        {currentSite?.siteName}
-        {currentContext ? ' > ' + currentContext.contextName : ''}
-        {currentCase ? ' > ' + currentCase.caseName : ''}
-      </p>
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
+          <p className="text-sm text-gray-500">
+            {currentSite?.siteName}
+            {currentContext ? ' > ' + currentContext.contextName : ''}
+            {currentCase ? ' > ' + currentCase.caseName : ''}
+          </p>
+        </div>
+        <button
+          className="border border-sky-600 bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+          onClick={() => onNavigate('my-skeletons')}
+        >
+          My Skeletons
+        </button>
+      </div>
 
 
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -283,17 +293,23 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
 
-      {/* nav buttons at bottom, just basic buttons for now */}
-      <div className="mt-6 flex gap-2">
+      {/* nav buttons at bottom */}
+      <div className="mt-6 flex flex-wrap gap-2">
         <button
-          className="border px-3 py-1"
+          className="border border-sky-600 bg-sky-600 text-white px-3 py-1 rounded font-medium hover:bg-sky-700 transition-colors"
+          onClick={() => onNavigate('my-skeletons')}
+        >
+          View All Skeletons
+        </button>
+        <button
+          className="border px-3 py-1 rounded disabled:opacity-50"
           disabled={!currentCase}
           onClick={() => currentCase && onNavigate('skeleton', currentCase.caseId)}
         >
           Go to Skeleton Page
         </button>
         <button
-          className="border px-3 py-1"
+          className="border px-3 py-1 rounded disabled:opacity-50"
           disabled={!currentCase}
           onClick={() => currentCase && onNavigate('export', currentCase.caseId)}
         >

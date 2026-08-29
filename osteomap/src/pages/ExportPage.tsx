@@ -1,11 +1,11 @@
 import type { NavigateFn } from './types'
 import './ExportPage.css' 
 
-function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
+function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: string }) {
   const activeCase = {
     siteCode: "UWA_2026",
     context: "Room_B_Spillway",
-    skeletonId: "SK_053",
+    skeletonId: caseId ?? "SK_053",
     lastModified: "12 Aug 2026",
     zonesRecorded: 42
   };
