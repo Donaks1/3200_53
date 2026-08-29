@@ -4,6 +4,7 @@ import { getAllCases, deleteCase } from '../db/caseOperation'
 import { getAllSites } from '../db/siteOperation'
 import { db } from '../db/db'
 import type { CaseRecord, SiteRecord, ContextRecord } from '../db/types'
+import SkeletonPreview from '../components/SkeletonPreview'
 import { 
   Search, 
   ArrowLeft, 
@@ -242,99 +243,107 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
             )}
           </div>
         ) : (
-          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
             {filteredSkeletons.map((item) => (
               <div
                 key={item.caseId}
                 onClick={() => onNavigate('skeleton', item.caseId)}
-                className="group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
+                className="group relative flex cursor-pointer flex-col sm:flex-row gap-4 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
               >
-                <div>
-                  {/* Top line: Name and Actions */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 group-hover:bg-sky-600 group-hover:text-white transition-colors">
-                          <Bone className="h-4 w-4" />
+                {/* Left: Non-interactive Skeleton SVG Preview */}
+                <div className="relative flex h-48 sm:h-auto sm:w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-50/90 border border-slate-100 p-1.5 transition-colors group-hover:bg-sky-50/40">
+                  <SkeletonPreview segmentStates={item.segmentStates} className="h-full w-full max-h-44" />
+                </div>
+
+                {/* Right: Specimen Details and Actions */}
+                <div className="flex flex-1 flex-col justify-between min-w-0">
+                  <div>
+                    {/* Top line: Name and Actions */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 group-hover:bg-sky-600 group-hover:text-white transition-colors">
+                            <Bone className="h-3.5 w-3.5" />
+                          </div>
+                          <h2 className="truncate text-base font-bold text-slate-900 group-hover:text-sky-700">
+                            {item.caseName}
+                          </h2>
                         </div>
-                        <h2 className="truncate text-base font-bold text-slate-900 group-hover:text-sky-700">
-                          {item.caseName}
-                        </h2>
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onNavigate('export', item.caseId)
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          title="Export record"
+                          aria-label="Export skeleton"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(item.caseId, item.caseName, e)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete record"
+                          aria-label="Delete skeleton"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onNavigate('export', item.caseId)
-                        }}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        title="Export record"
-                        aria-label="Export skeleton"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(item.caseId, item.caseName, e)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        title="Delete record"
-                        aria-label="Delete skeleton"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    {/* Breadcrumb / Location */}
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate font-medium text-slate-700">{item.siteName}</span>
+                      <span className="text-slate-300">/</span>
+                      <Layers className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate text-slate-600">{item.contextName}</span>
                     </div>
-                  </div>
 
-                  {/* Breadcrumb / Location */}
-                  <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    <span className="truncate font-medium text-slate-700">{item.siteName}</span>
-                    <span className="text-slate-300">/</span>
-                    <Layers className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    <span className="truncate text-slate-600">{item.contextName}</span>
-                  </div>
-
-                  {/* Metadata Tags */}
-                  <div className="mt-3.5 flex flex-wrap gap-1.5">
-                    {item.ageGroup && (
-                      <span className="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">
-                        {item.ageGroup}
+                    {/* Metadata Tags */}
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {item.ageGroup && (
+                        <span className="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">
+                          {item.ageGroup}
+                        </span>
+                      )}
+                      {item.sex && (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">
+                          <User className="h-3 w-3 text-slate-400" />
+                          {item.sex}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                        <Sparkles className="h-3 w-3" />
+                        {item.zonesCount} recorded
                       </span>
+                    </div>
+
+                    {/* Field Notes preview if available */}
+                    {item.fieldNotes && (
+                      <p className="mt-2 line-clamp-2 text-xs italic text-slate-400">
+                        "{item.fieldNotes}"
+                      </p>
                     )}
-                    {item.sex && (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">
-                        <User className="h-3 w-3 text-slate-400" />
-                        {item.sex}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                      <Sparkles className="h-3 w-3" />
-                      {item.zonesCount} recorded
-                    </span>
                   </div>
 
-                  {/* Field Notes preview if available */}
-                  {item.fieldNotes && (
-                    <p className="mt-2.5 line-clamp-2 text-xs italic text-slate-400">
-                      "{item.fieldNotes}"
-                    </p>
-                  )}
-                </div>
+                  {/* Card Footer: Date and Load CTA */}
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      <span>{formatDate(item.dateModified || item.dateCreated)}</span>
+                    </div>
 
-                {/* Card Footer: Date and Load CTA */}
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{formatDate(item.dateModified || item.dateCreated)}</span>
-                  </div>
-
-                  <div className="flex items-center font-semibold text-sky-600 group-hover:translate-x-0.5 transition-transform">
-                    <span>Load</span>
-                    <ChevronRight className="h-4 w-4 ml-0.5" />
+                    <div className="flex items-center font-semibold text-sky-600 group-hover:translate-x-0.5 transition-transform">
+                      <span>Load</span>
+                      <ChevronRight className="h-4 w-4 ml-0.5" />
+                    </div>
                   </div>
                 </div>
               </div>
