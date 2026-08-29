@@ -80,10 +80,15 @@
   margin-bottom: 0;
 }
 
-.export-reminder {
+/* Styled in this step */
+.export-reminder-box {
+  border-radius: 8px;
+  padding: 12px;
   font-size: 12px;
   text-align: left;
-  color: var(--text);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-h);
 }
 
 .export-button-basic {

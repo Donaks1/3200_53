@@ -45,12 +45,12 @@ function ExportPage({ onNavigate }: { onNavigate: NavigateFn }) {
           </ul>
         </div>
 
-        {/* Added: Structural Warning Text (unpolished, standard alignment) */}
-        <p className="export-reminder">
+        {/* Warning Alert Container (styled in this step) */}
+        <div className="export-reminder-box">
           <strong>Notice:</strong> This application operates offline-first. To prevent local browser storage clear-outs from deleting your data, export a backup as a CSV.
-        </p>
+        </div>
 
-        {/* Action Buttons (Added the second button structurally, but unstyled) */}
+        {/* Action Buttons (CSV styled, PDF remains unpolished inline) */}
         <div style={{ marginTop: '24px' }}>
           <button 
             type="button"
