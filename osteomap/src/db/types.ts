@@ -1,4 +1,4 @@
-export type SegmentState = 'complete' | 'absent' | 'pathological';
+export type SegmentState = 'complete' | 'absent' | 'fragmentary';
 
 export type AgeGroup = 'infant' | 'child' | 'adolescent' | 'adult';
 

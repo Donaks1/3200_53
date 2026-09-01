@@ -51,6 +51,16 @@ export async function getCasesByContext(contextId: string): Promise<CaseRecord[]
     return db.cases.where('contextId').equals(contextId).toArray();
 }
 
+export async function deleteSegmentState(caseId: string, segmentId: string): Promise<void> {
+    const existingCase = await db.cases.get(caseId);
+    if (!existingCase) throw new Error("Case not found");
+
+    delete existingCase.segmentStates[segmentId];
+    existingCase.dateModified = new Date().toISOString();
+
+    await db.cases.put(existingCase);
+}
+
 export async function deleteCase(caseId: string): Promise<void> {
     await db.cases.delete(caseId);
 }
