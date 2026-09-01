@@ -3,7 +3,7 @@ import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import { CheckCheck, Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
-import { getCase, updateSegmentState } from '../db/caseOperation'
+import { getCase, updateSegmentState, deleteSegmentState } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
 
 
@@ -38,6 +38,13 @@ const paintLabel = (paint: PaintState) =>
 const SEGMENT_STATE_BY_PAINT: Partial<Record<PaintState, SegmentState>> = {
   present: 'complete',
   absent: 'absent',
+  fragmentary: 'fragmentary',
+}
+
+const PAINT_STATE_BY_SEGMENT: Partial<Record<SegmentState, PaintState>> = {
+  complete: 'present',
+  absent: 'absent',
+  fragmentary: 'fragmentary',
 }
 
 // A marked segment and the colour it was marked with.
@@ -180,9 +187,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   useEffect(() => {
     const svg = diagramRef.current?.querySelector('svg')
     if (!svg || !caseData) return
-    for (const [segmentId, state] of Object.entries(caseData.segmentStates)) {
-      svg.querySelector(`#${segmentId}`)?.setAttribute('data-state', state)
-    }
+
+    const restored: PaintedSegment[] = Object.entries(caseData.segmentStates)
+      .map(([segmentId, state]) => {
+        const element = svg.querySelector(`#${segmentId}`)
+        if (!element) return null
+        return { element, paint: PAINT_STATE_BY_SEGMENT[state]}
+      })
+      .filter((v): v is PaintedSegment => v !== null)
+    
+    setSelected(restored)
   }, [caseData])
 
   useEffect(() => {
@@ -245,8 +259,13 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       return erasing ? cleared : withPaint(cleared, target, activePaint)
     })
 
+    if (!target.id || !caseData) return
+
     // Erasing doesn't clear the stored state yet, so only the marks are written
     // back for now.
+    if (erasing) {
+      await deleteSegmentState(caseId, target.id)
+    }
     const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
     if (target.id && caseData && stateToSave && !erasing) {
       await updateSegmentState(caseId, target.id, stateToSave)

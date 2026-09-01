@@ -14,7 +14,7 @@ function App() {
   }
 
   if (page === 'skeleton' && activeCaseId) return <SkeletonPage caseId={activeCaseId} onNavigate={handleNavigate} />
-  if (page === 'export' && activeCaseId) return <ExportPage caseId={activeCaseId} onNavigate={handleNavigate} />
+  if (page === 'export') return <ExportPage caseId={activeCaseId} onNavigate={handleNavigate} />
   return <HomePage onNavigate={handleNavigate} />
 }
 

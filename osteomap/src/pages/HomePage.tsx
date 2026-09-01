@@ -299,6 +299,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         >
           Go to Export Page
         </button>
+        <button
+          className="border px-3 py-1"
+          onClick={() => onNavigate('export')}
+        >
+          Go to Import Page
+        </button>
       </div>
 
       <TextInputPopup
