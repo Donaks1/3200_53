@@ -5,9 +5,9 @@ import { getContextById } from '../db/contextOperation'
 import { getSiteById } from '../db/siteOperation'
 import { exportDatabase, exportSingleCase, importDatabase } from '../db/exportImport'
 import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
-import './ExportPage.css' 
+import './ExportPage.css'
 
-function ExportPage({ caseId, onNavigate }: { caseId: string | null; onNavigate: NavigateFn }) {
+function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate: NavigateFn }) {
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
   const [contextData, setContextData] = useState<ContextRecord | null>(null);
   const [site, setSite] = useState<SiteRecord | null>(null);
@@ -15,19 +15,30 @@ function ExportPage({ caseId, onNavigate }: { caseId: string | null; onNavigate:
 
   useEffect(() => {
     if (!caseId) return;
+
+    let active = true;
+
     getCase(caseId).then(async (c) => {
+      if (!active) return;
       setCaseData(c ?? null);
       if (!c) return;
+
       const context = await getContextById(c.contextId);
+      if (!active) return;
       setContextData(context ?? null);
-      if (context) {
-        const siteData = await getSiteById(context.siteId);
-        setSite(siteData ?? null);
-      }
+      if (!context) return;
+
+      const siteData = await getSiteById(context.siteId);
+      if (!active) return;
+      setSite(siteData ?? null);
     });
+
+    return () => {
+      active = false;
+    };
   }, [caseId]);
 
-  const zonesRecorded = caseData ? Object.keys(caseData.segmentStates).length : 0;
+  const zonesRecorded = Object.keys(caseData?.segmentStates ?? {}).length;
 
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

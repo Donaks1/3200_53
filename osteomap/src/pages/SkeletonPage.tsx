@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
-import { CheckCheck, Redo2, Search, SlidersHorizontal, Undo2, X } from 'lucide-react'
-import { getCase, updateSegmentState, deleteSegmentState } from '../db/caseOperation'
+import { ArrowLeft, ArrowRight, CheckCheck, List, Redo2, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
+import { getCase, updateSegmentState, removeSegmentState, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
 
 
@@ -33,9 +33,9 @@ const PAINT_OPTIONS: { state: PaintState; label: string; swatch: string }[] = [
 const paintLabel = (paint: PaintState) =>
   PAINT_OPTIONS.find((option) => option.state === paint)?.label ?? paint
 
-// Only the two states with a counterpart in the stored SegmentState enum are
-// written back — there is no 'fragmentary' member to save yet.
-const SEGMENT_STATE_BY_PAINT: Partial<Record<PaintState, SegmentState>> = {
+// These two must stay inverses of each other: the first decides what gets
+// written to the database, the second decides what gets repainted on load.
+const SEGMENT_STATE_BY_PAINT: Record<PaintState, SegmentState> = {
   present: 'complete',
   absent: 'absent',
   fragmentary: 'fragmentary',
@@ -46,6 +46,7 @@ const PAINT_STATE_BY_SEGMENT: Partial<Record<SegmentState, PaintState>> = {
   absent: 'absent',
   fragmentary: 'fragmentary',
 }
+
 
 // A marked segment and the colour it was marked with.
 type PaintedSegment = { element: Element; paint: PaintState }
@@ -179,23 +180,41 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     })
     .slice(0, 50)
 
-  // Load the case saved data on mount
+  // Load the case record on mount.
   useEffect(() => {
-    getCase(caseId).then((data) => setCaseData(data ?? null))
+    let active = true
+
+    getCase(caseId).then((data) => {
+      if (active) setCaseData(data ?? null)
+    })
+
+    return () => {
+      active = false
+    }
   }, [caseId])
 
+  // Repaint the saved segments once the record and the SVG are both available.
+  // Split out from the load so it doesn't depend on the fetch resolving after
+  // the diagram has mounted.
   useEffect(() => {
     const svg = diagramRef.current?.querySelector('svg')
-    if (!svg || !caseData) return
+    if (!svg || !caseData?.segmentStates) return
 
-    const restored: PaintedSegment[] = Object.entries(caseData.segmentStates)
-      .map(([segmentId, state]) => {
-        const element = svg.querySelector(`#${segmentId}`)
-        if (!element) return null
-        return { element, paint: PAINT_STATE_BY_SEGMENT[state]}
-      })
-      .filter((v): v is PaintedSegment => v !== null)
-    
+    const restored = Object.entries(caseData.segmentStates).flatMap(([segmentId, state]) => {
+      const paint = state ? PAINT_STATE_BY_SEGMENT[state] : undefined
+      // A state with no colour of its own isn't drawable, so it's skipped
+      // rather than guessed at.
+      if (!paint) return []
+
+      try {
+        const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
+        return element ? [{ element, paint }] : []
+      } catch (e) {
+        console.warn(`Could not select segment #${segmentId}:`, e)
+        return []
+      }
+    })
+
     setSelected(restored)
   }, [caseData])
 
@@ -259,20 +278,20 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       return erasing ? cleared : withPaint(cleared, target, activePaint)
     })
 
-    if (!target.id || !caseData) return
+    if (!target.id) return
 
-    // Erasing doesn't clear the stored state yet, so only the marks are written
-    // back for now.
-    if (erasing) {
-      await deleteSegmentState(caseId, target.id)
-    }
-    const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    if (target.id && caseData && stateToSave && !erasing) {
-      await updateSegmentState(caseId, target.id, stateToSave)
+    try {
+      if (erasing) {
+        await removeSegmentState(caseId, target.id)
+      } else {
+        await updateSegmentState(caseId, target.id, SEGMENT_STATE_BY_PAINT[activePaint])
+      }
+    } catch (err) {
+      console.error('Failed to update segment state in DB:', err)
     }
   }
 
-  function handleSearchOption(option: SearchOption) {
+  async function handleSearchOption(option: SearchOption) {
     const svg = diagramRef.current?.querySelector('svg')
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
       (element) => element.id === option.id,
@@ -286,6 +305,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       setSelected((current) =>
         withPaint(withoutPaint(current, selectedElement), selectedElement, activePaint),
       )
+
+      if (selectedElement.id) {
+        try {
+          await updateSegmentState(caseId, selectedElement.id, SEGMENT_STATE_BY_PAINT[activePaint])
+        } catch (err) {
+          console.error('Failed to save segment state:', err)
+        }
+      }
     }
     setSearchTerm(option.label)
     setSheetOpen(false)
@@ -299,8 +326,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   async function selectAllBones() {
+    const label = paintLabel(activePaint)
+    const confirmed = window.confirm(
+      `Are you sure you want to mark ALL bones as "${label}"? This will overwrite current bone states.`
+    )
+    if (!confirmed) return
+
     const svg = diagramRef.current?.querySelector('svg')
-    if (!svg) return //If we couldn't find the SVG, stop the function
+    if (!svg) return
 
     const bones = boneOptions
       .map((bone) => svg.querySelector(`#${CSS.escape(bone.id)}`))
@@ -308,8 +341,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelected(bones.map((element) => ({ element, paint: activePaint })))
 
     const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    if (caseData && stateToSave) {
-      await Promise.all(bones.map((bone) => updateSegmentState(caseId, bone.id, stateToSave)))
+    try {
+      const newStates: Record<string, SegmentState> = {}
+      bones.forEach((bone) => {
+        if (bone.id) newStates[bone.id] = stateToSave
+      })
+      await setAllSegmentStates(caseId, newStates)
+    } catch (err) {
+      console.error('Failed to save all bones:', err)
     }
   }
 
@@ -343,13 +382,56 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   return (
     <div className="skeleton-page">
-      <p aria-live="polite">
-        {selected.length === 1
-          ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
-          : selected.length > 1
-            ? `${selected.length} segments marked`
-            : `Click a ${selectionMode} to mark it ${paintLabel(activePaint).toLowerCase()}.`}
-      </p>
+      {/* Top Navigation & Info Header */}
+      <header className="z-20 flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 py-2 shadow-xs backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => onNavigate('home')}
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+          title="Back to Home"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Home</span>
+        </button>
+
+        <div className="flex flex-col items-center text-center px-2 min-w-0">
+          <span className="truncate text-xs font-bold uppercase tracking-wider text-sky-700">
+            {caseData?.caseName ?? 'Skeleton'}
+          </span>
+          <span aria-live="polite" className="truncate text-[11px] font-medium text-slate-500">
+            {selected.length === 1
+              ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
+              : selected.length > 1
+                ? `${selected.length} segments marked`
+                : `Tap a ${selectionMode} to mark ${paintLabel(activePaint).toLowerCase()}`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onNavigate('my-skeletons')}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+            title="My Skeletons"
+          >
+            <List className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">My Skeletons</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate('export', caseId)}
+            className="flex items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 transition-colors"
+            title="Export Record"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export</span>
+            <ArrowRight className="h-3.5 w-3.5 hidden sm:inline" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Skeleton Diagram */}
       <div
         ref={diagramRef}
         className="skeleton-diagram"
@@ -358,12 +440,6 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         onClick={handleDiagramClick}
         dangerouslySetInnerHTML={skeletonFrontMarkup}
       />
-      <button type="button" onClick={() => onNavigate('home')}>
-        Back to Home
-      </button>
-      <button type="button" onClick={() => onNavigate('export')}>
-        Go to Export Page
-      </button>
 
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
         <div

@@ -95,10 +95,11 @@ input {
 .skeleton-page {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 100dvh;
-  overflow-y: auto;
-  overscroll-behavior-y: auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .search-results-scrollbar {
@@ -139,12 +140,17 @@ input {
 }
 
 .skeleton-diagram {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px 0;
+  padding: 6px 8px calc(72px + env(safe-area-inset-bottom));
+  width: 100%;
+  overflow: hidden;
 
   svg {
-    height: min(78svh, 900px);
+    height: 100%;
     max-height: 100%;
     width: auto;
     max-width: 100%;
@@ -190,3 +196,42 @@ input {
     stroke: var(--paint-edge);
   }
 }
+
+.skeleton-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  svg [data-preview-state='complete'],
+  svg [data-preview-state='present'],
+  svg [data-preview-state='complete'] :is(path, polygon, circle, ellipse),
+  svg [data-preview-state='present'] :is(path, polygon, circle, ellipse) {
+    fill: #10b981 !important;
+    stroke: #047857 !important;
+  }
+
+  svg [data-preview-state='absent'],
+  svg [data-preview-state='absent'] :is(path, polygon, circle, ellipse) {
+    fill: #ef4444 !important;
+    stroke: #b91c1c !important;
+  }
+
+  svg [data-preview-state='pathological'],
+  svg [data-preview-state='fragmentary'],
+  svg [data-preview-state='pathological'] :is(path, polygon, circle, ellipse),
+  svg [data-preview-state='fragmentary'] :is(path, polygon, circle, ellipse) {
+    fill: #3b82f6 !important;
+    stroke: #1d4ed8 !important;
+  }
+}
+
