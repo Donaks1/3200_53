@@ -7,9 +7,6 @@ import { getCase, updateSegmentState, removeSegmentState, setAllSegmentStates } 
 import type { CaseRecord, SegmentState } from '../db/types'
 
 
-
-
-
 const skeletonFront = skeletonFrontSource
   .replace(/<\?xml[^?]*\?>/, '') // Strips the XML line of the svg file to prevent confusing HTML parser
   .replaceAll('cls-', 'front-cls-') // Stops the front SVG CSS from clashing with back view
@@ -36,10 +33,18 @@ const PAINT_OPTIONS: { state: PaintState; label: string; swatch: string }[] = [
 const paintLabel = (paint: PaintState) =>
   PAINT_OPTIONS.find((option) => option.state === paint)?.label ?? paint
 
+// These two must stay inverses of each other: the first decides what gets
+// written to the database, the second decides what gets repainted on load.
 const SEGMENT_STATE_BY_PAINT: Record<PaintState, SegmentState> = {
   present: 'complete',
   absent: 'absent',
-  fragmentary: 'pathological',
+  fragmentary: 'fragmentary',
+}
+
+const PAINT_STATE_BY_SEGMENT: Partial<Record<SegmentState, PaintState>> = {
+  complete: 'present',
+  absent: 'absent',
+  fragmentary: 'fragmentary',
 }
 
 
@@ -175,42 +180,43 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     })
     .slice(0, 50)
 
-  // Load the case saved data on mount and pre-fill painted bones
+  // Load the case record on mount.
   useEffect(() => {
     let active = true
 
     getCase(caseId).then((data) => {
-      if (!active || !data) return
-      setCaseData(data)
-
-      const svg = diagramRef.current?.querySelector('svg')
-      if (!svg || !data.segmentStates) return
-
-      const initialSelected: PaintedSegment[] = []
-      for (const [segmentId, state] of Object.entries(data.segmentStates)) {
-        if (!state) continue
-        try {
-          const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
-          if (element) {
-            let paint: PaintState = 'present'
-            if (state === 'absent') paint = 'absent'
-            else if (state === 'pathological') paint = 'fragmentary'
-            else if (state === 'complete') paint = 'present'
-
-            initialSelected.push({ element, paint })
-          }
-        } catch (e) {
-          console.warn(`Could not select segment #${segmentId}:`, e)
-        }
-      }
-
-      setSelected(initialSelected)
+      if (active) setCaseData(data ?? null)
     })
 
     return () => {
       active = false
     }
   }, [caseId])
+
+  // Repaint the saved segments once the record and the SVG are both available.
+  // Split out from the load so it doesn't depend on the fetch resolving after
+  // the diagram has mounted.
+  useEffect(() => {
+    const svg = diagramRef.current?.querySelector('svg')
+    if (!svg || !caseData?.segmentStates) return
+
+    const restored = Object.entries(caseData.segmentStates).flatMap(([segmentId, state]) => {
+      const paint = state ? PAINT_STATE_BY_SEGMENT[state] : undefined
+      // A state with no colour of its own isn't drawable, so it's skipped
+      // rather than guessed at.
+      if (!paint) return []
+
+      try {
+        const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
+        return element ? [{ element, paint }] : []
+      } catch (e) {
+        console.warn(`Could not select segment #${segmentId}:`, e)
+        return []
+      }
+    })
+
+    setSelected(restored)
+  }, [caseData])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -272,19 +278,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       return erasing ? cleared : withPaint(cleared, target, activePaint)
     })
 
-    if (target.id) {
-      try {
-        if (erasing) {
-          await removeSegmentState(caseId, target.id)
-        } else {
-          const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-          if (stateToSave) {
-            await updateSegmentState(caseId, target.id, stateToSave)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to update segment state in DB:', err)
+    if (!target.id) return
+
+    try {
+      if (erasing) {
+        await removeSegmentState(caseId, target.id)
+      } else {
+        await updateSegmentState(caseId, target.id, SEGMENT_STATE_BY_PAINT[activePaint])
       }
+    } catch (err) {
+      console.error('Failed to update segment state in DB:', err)
     }
   }
 
@@ -304,13 +307,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       )
 
       if (selectedElement.id) {
-        const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-        if (stateToSave) {
-          try {
-            await updateSegmentState(caseId, selectedElement.id, stateToSave)
-          } catch (err) {
-            console.error('Failed to save segment state:', err)
-          }
+        try {
+          await updateSegmentState(caseId, selectedElement.id, SEGMENT_STATE_BY_PAINT[activePaint])
+        } catch (err) {
+          console.error('Failed to save segment state:', err)
         }
       }
     }
@@ -341,16 +341,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelected(bones.map((element) => ({ element, paint: activePaint })))
 
     const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    if (stateToSave) {
-      try {
-        const newStates: Record<string, SegmentState> = {}
-        bones.forEach((bone) => {
-          if (bone.id) newStates[bone.id] = stateToSave
-        })
-        await setAllSegmentStates(caseId, newStates)
-      } catch (err) {
-        console.error('Failed to save all bones:', err)
-      }
+    try {
+      const newStates: Record<string, SegmentState> = {}
+      bones.forEach((bone) => {
+        if (bone.id) newStates[bone.id] = stateToSave
+      })
+      await setAllSegmentStates(caseId, newStates)
+    } catch (err) {
+      console.error('Failed to save all bones:', err)
     }
   }
 

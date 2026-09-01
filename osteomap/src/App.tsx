@@ -15,7 +15,7 @@ function App() {
   }
 
   if (page === 'skeleton' && activeCaseId) return <SkeletonPage caseId={activeCaseId} onNavigate={handleNavigate} />
-  if (page === 'export' && activeCaseId) return <ExportPage caseId={activeCaseId} onNavigate={handleNavigate} />
+  if (page === 'export') return <ExportPage caseId={activeCaseId} onNavigate={handleNavigate} />
   if (page === 'my-skeletons') return <MySkeletons onNavigate={handleNavigate} />
   return <HomePage onNavigate={handleNavigate} />
 }

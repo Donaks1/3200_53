@@ -1,14 +1,58 @@
+import { useEffect, useState } from 'react'
 import type { NavigateFn } from './types'
-import './ExportPage.css' 
+import { getCase } from '../db/caseOperation'
+import { getContextById } from '../db/contextOperation'
+import { getSiteById } from '../db/siteOperation'
+import { exportDatabase, exportSingleCase, importDatabase } from '../db/exportImport'
+import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
+import './ExportPage.css'
 
-function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: string }) {
-  const activeCase = {
-    siteCode: "UWA_2026",
-    context: "Room_B_Spillway",
-    skeletonId: caseId ?? "SK_053",
-    lastModified: "12 Aug 2026",
-    zonesRecorded: 42
-  };
+function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate: NavigateFn }) {
+  const [caseData, setCaseData] = useState<CaseRecord | null>(null);
+  const [contextData, setContextData] = useState<ContextRecord | null>(null);
+  const [site, setSite] = useState<SiteRecord | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!caseId) return;
+
+    let active = true;
+
+    getCase(caseId).then(async (c) => {
+      if (!active) return;
+      setCaseData(c ?? null);
+      if (!c) return;
+
+      const context = await getContextById(c.contextId);
+      if (!active) return;
+      setContextData(context ?? null);
+      if (!context) return;
+
+      const siteData = await getSiteById(context.siteId);
+      if (!active) return;
+      setSite(siteData ?? null);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [caseId]);
+
+  const zonesRecorded = Object.keys(caseData?.segmentStates ?? {}).length;
+
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportStatus("Importing...");
+    try {
+      await importDatabase(file);
+      setImportStatus("Import successful!");
+    } catch {
+      setImportStatus("Import failed. Please check the file and try again.");
+    }
+    event.target.value = '';
+  }
 
   return (
     <div className="export-page">
@@ -16,7 +60,7 @@ function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: s
       <header className="export-header">
         <button 
           type="button"
-          onClick={() => onNavigate('skeleton')}
+          onClick={() => onNavigate('skeleton', caseId || undefined)}
           className="export-header-back"
         >
           ← Back
@@ -38,10 +82,10 @@ function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: s
         <div className="export-card">
           <h2 className="export-card-title">Active Case Data</h2>
           <ul className="export-card-list">
-            <li><strong>Site Code:</strong> {activeCase.siteCode}</li>
-            <li><strong>Context:</strong> {activeCase.context}</li>
-            <li><strong>Skeleton ID:</strong> {activeCase.skeletonId}</li>
-            <li><strong>Bones Recorded:</strong> {activeCase.zonesRecorded}</li>
+            <li><strong>Site Code:</strong> {site?.siteName || 'N/A'}</li>
+            <li><strong>Context:</strong> {contextData?.contextName || 'N/A'}</li>
+            <li><strong>Skeleton ID:</strong> {caseData?.caseName || 'N/A'}</li>
+            <li><strong>Bones Recorded:</strong> {zonesRecorded}</li>
           </ul>
         </div>
 
@@ -55,9 +99,10 @@ function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: s
           <button 
             type="button"
             className="export-button-basic"
-            onClick={() => console.log('CSV Click')}
+            disabled={!caseData}
+            onClick={() => caseData && exportSingleCase(caseData.caseId)}
           >
-            Export as CSV (.csv)
+            Export This Case (.json)
           </button>
           
           <button 
@@ -73,12 +118,25 @@ function ExportPage({ onNavigate, caseId }: { onNavigate: NavigateFn; caseId?: s
               color: 'var(--text)',
               cursor: 'pointer'
             }}
-            onClick={() => console.log('PDF Click')}
+            onClick={() => exportDatabase()}
           >
-            Export as PDF (.pdf) [Draft]
+            Export Full Backup (.json)
           </button>
         </div>
 
+        {/* Import Section */}
+        <div className="export-card">
+          <h2 className="export-card-title">Import Database</h2>
+          <p className="export-card-description">
+            Select a JSON file to import into the application.
+          </p>
+          <input
+            type="file"
+            accept="application/json"
+            onChange={handleImportFile}
+          />
+          {importStatus && <p style={{ fontSize: '14px', color: 'var(--text)' }}>{importStatus}</p>}
+        </div>
       </main>
     </div>
   );

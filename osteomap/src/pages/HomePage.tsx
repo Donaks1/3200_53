@@ -287,11 +287,18 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
       {/* nav buttons at bottom */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button
+         <button
           className="border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs"
           onClick={() => onNavigate('my-skeletons')}
         >
           View All Skeletons
+        </button>
+
+        <button
+          className="border px-3 py-1"
+          onClick={() => onNavigate('export')}
+        >
+          Go to Import Page
         </button>
 
         {currentSite && currentContext && currentCase && (
