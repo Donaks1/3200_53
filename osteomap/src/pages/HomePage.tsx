@@ -7,6 +7,7 @@ import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/type
 import TextInputPopup from '../components/TextInputPopup'
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
@@ -165,10 +166,10 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   }
 
   return (
-    <div className="p-4">
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-4">
       <div className="mb-4">
-        <h1 className="text-xl font-bold mb-1">OsteoMap</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-lg font-bold text-slate-900 mb-1">OsteoMap</h1>
+        <p className="text-sm text-slate-500">
           {currentSite?.siteName}
           {currentContext ? ' > ' + currentContext.contextName : ''}
           {currentCase ? ' > ' + currentCase.caseName : ''}
@@ -178,21 +179,33 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
       <div className="flex flex-col gap-4 sm:flex-row">
         {/* Site column */}
-        <div className="flex-1 border border-gray-300 rounded p-2">
+        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
           <div className="flex justify-between items-center mb-2">
-            <b>Site</b>
-            <button className="border px-2 text-sm" onClick={() => setPopSite(true)}>
-              + Add
+            <b className="text-sm font-bold text-slate-900">Site</b>
+            <button
+              className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98"
+              onClick={() => setPopSite(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
             </button>
           </div>
           
            
           {sites.map((s) => (
-            <div key={s.siteId} className="flex items-center gap-1 mb-1">
+            <div
+              key={s.siteId}
+              className={
+                'group flex items-center gap-1 rounded-xl border p-1 pl-3 mb-2 shadow-xs transition-all ' +
+                (s.siteId === siteId
+                  ? 'border-sky-300 bg-sky-50'
+                  : 'border-slate-200 bg-white hover:border-sky-300 hover:shadow-md')
+              }
+            >
               <button
                 className={
-                  'flex-1 text-left px-2 py-1 border ' +
-                  (s.siteId === siteId ? 'bg-gray-200' : '')
+                  'flex-1 text-left py-1.5 text-sm font-medium truncate ' +
+                  (s.siteId === siteId ? 'text-sky-700' : 'text-slate-700')
                 }
                 onClick={() => {
                   setSiteId(s.siteId)
@@ -202,11 +215,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               >
                 {s.siteName}
               </button>
-              <button className="text-sm" onClick={() => editSite(s.siteId)}>
-                Edit
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => editSite(s.siteId)}
+                title="Rename site"
+                aria-label="Rename site"
+              >
+                <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button className="text-sm" onClick={() => removeSite(s.siteId)}>
-                Del
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                onClick={() => removeSite(s.siteId)}
+                title="Delete site"
+                aria-label="Delete site"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
@@ -214,22 +237,35 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
         {/* Context column */}
-        <div className="flex-1 border border-gray-300 rounded p-2">
+        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
           <div className="flex justify-between items-center mb-2">
-            <b>Context</b>
-            <button className="border px-2 text-sm" onClick={() => setPopCxt(true)} disabled={!currentSite}>
-              + Add
+            <b className="text-sm font-bold text-slate-900">Context</b>
+            <button
+              className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+              onClick={() => setPopCxt(true)}
+              disabled={!currentSite}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
             </button>
           </div>
           
 
-          {!currentSite && <p className="text-sm text-gray-400">pick a site first</p>}
+          {!currentSite && <p className="text-sm text-slate-400">pick a site first</p>}
           {contexts.map((c) => (
-            <div key={c.contextId} className="flex items-center gap-1 mb-1">
+            <div
+              key={c.contextId}
+              className={
+                'group flex items-center gap-1 rounded-xl border p-1 pl-3 mb-2 shadow-xs transition-all ' +
+                (c.contextId === contextId
+                  ? 'border-sky-300 bg-sky-50'
+                  : 'border-slate-200 bg-white hover:border-sky-300 hover:shadow-md')
+              }
+            >
               <button
                 className={
-                  'flex-1 text-left px-2 py-1 border ' +
-                  (c.contextId === contextId ? 'bg-gray-200' : '')
+                  'flex-1 text-left py-1.5 text-sm font-medium truncate ' +
+                  (c.contextId === contextId ? 'text-sky-700' : 'text-slate-700')
                 }
                 onClick={() => {
                 setContextId(c.contextId)
@@ -238,11 +274,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               >
                 {c.contextName}
               </button>
-              <button className="text-sm" onClick={() => editContext(c.contextId)}>
-                Edit
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => editContext(c.contextId)}
+                title="Rename context"
+                aria-label="Rename context"
+              >
+                <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button className="text-sm" onClick={() => removeContext(c.contextId)}>
-                Del
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                onClick={() => removeContext(c.contextId)}
+                title="Delete context"
+                aria-label="Delete context"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
@@ -251,32 +297,55 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
         {/* Specimen column */}
-        <div className="flex-1 border border-gray-300 rounded p-2">
+        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
           <div className="flex justify-between items-center mb-2">
-            <b>Specimen</b>
-            <button className="border px-2 text-sm" onClick={startAddCase} disabled={!currentContext}>
-              + Add
+            <b className="text-sm font-bold text-slate-900">Specimen</b>
+            <button
+              className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+              onClick={startAddCase}
+              disabled={!currentContext}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
             </button>
           </div>
         
           
-          {!currentContext && <p className="text-sm text-gray-400">pick a context first</p>}
+          {!currentContext && <p className="text-sm text-slate-400">pick a context first</p>}
           {cases.map((cas) => (
-            <div key={cas.caseId} className="flex items-center gap-1 mb-1">
+            <div
+              key={cas.caseId}
+              className={
+                'group flex items-center gap-1 rounded-xl border p-1 pl-3 mb-2 shadow-xs transition-all ' +
+                (cas.caseId === caseId
+                  ? 'border-sky-300 bg-sky-50'
+                  : 'border-slate-200 bg-white hover:border-sky-300 hover:shadow-md')
+              }
+            >
               <button
                 className={
-                  'flex-1 text-left px-2 py-1 border ' +
-                  (cas.caseId === caseId ? 'bg-gray-200' : '')
+                  'flex-1 text-left py-1.5 text-sm font-medium truncate ' +
+                  (cas.caseId === caseId ? 'text-sky-700' : 'text-slate-700')
                 }
                 onClick={() => setCaseId(cas.caseId)}
               >
                 {cas.caseName}
               </button>
-              <button className="text-sm" onClick={() => editCase(cas.caseId)}>
-                Edit
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => editCase(cas.caseId)}
+                title="Edit specimen"
+                aria-label="Edit specimen"
+              >
+                <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button className="text-sm" onClick={() => removeCase(cas.caseId)}>
-                Del
+              <button
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                onClick={() => removeCase(cas.caseId)}
+                title="Delete specimen"
+                aria-label="Delete specimen"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
@@ -295,7 +364,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         </button>
 
         <button
-          className="border px-3 py-1"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
           onClick={() => onNavigate('export')}
         >
           Go to Import Page
