@@ -78,6 +78,9 @@ function selectionAt(
 ): Element | null {
   // Landing outside the drawing, or on the root, means the click missed the skeleton.
   if (!svg.contains(target) || target === svg) return null
+  // In either mode, individual teeth are selectable as distinct segments
+  const tooth = target.closest('[id*="tooth"]') || (target.id?.includes('tooth') ? target : null)
+  if (tooth) return tooth
   return mode === 'zone' ? target : target.closest('g')
 }
 
@@ -96,6 +99,7 @@ function boneLabel(id: string) {
 }
 
 function selectionLabel(selected: Element) {
+  if (selected.id?.includes('tooth')) return boneLabel(selected.id)
   const bone = boneOf(selected)
   // A shape with no group around it isn't a finished bone yet, so all we can
   // report is whatever it happens to be called.
@@ -165,6 +169,8 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
   return [...document.querySelectorAll<SVGElement>('[id]')]
     .filter((element) => {
       const isGroup = element.tagName.toLowerCase() === 'g'
+      const isTooth = element.id.includes('tooth')
+      if (isTooth) return true
       return mode === 'bone' ? isGroup : !isGroup && element.closest('g') !== null
     })
     .map((element) => ({ id: element.id, label: boneLabel(element.id) }))
@@ -369,25 +375,34 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // bone splits into its other zones, then this one goes back in on its own.
     const covering = paintOf(selected, target)
     const erasing = covering === activePaint
+
+    // Find all matching instances of this segment across all layers (skeleton and skull views)
+    const matchingElements = target.id
+      ? Array.from(diagramRef.current?.querySelectorAll<SVGElement>(`#${CSS.escape(target.id)}`) ?? [])
+      : [target]
+
     setSelected((current) => {
-      const cleared = withoutPaint(current, target)
-      return erasing ? cleared : withPaint(cleared, target, activePaint)
+      let next = current
+      for (const el of matchingElements) {
+        const cleared = withoutPaint(next, el)
+        next = erasing ? cleared : withPaint(cleared, el, activePaint)
+      }
+      return next
     })
 
     if (!target.id) return
 
     try {
       if (erasing) {
-        await removeSegmentState(caseId, target.id)
         setCaseData((prev) => {
           if (!prev) return prev
           const next = { ...(prev.segmentStates ?? {}) }
           delete next[target.id]
           return { ...prev, segmentStates: next }
         })
+        await removeSegmentState(caseId, target.id)
       } else {
         const newState = SEGMENT_STATE_BY_PAINT[activePaint]
-        await updateSegmentState(caseId, target.id, newState)
         setCaseData((prev) => {
           if (!prev) return prev
           return {
@@ -398,6 +413,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             },
           }
         })
+        await updateSegmentState(caseId, target.id, newState)
       }
     } catch (err) {
       console.error('Failed to update segment state in DB:', err)
@@ -416,14 +432,21 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // Paints for the same reason a click does, so picking bones by name and by
     // tapping them can be mixed freely.
     if (selectedElement) {
-      setSelected((current) =>
-        withPaint(withoutPaint(current, selectedElement), selectedElement, activePaint),
-      )
+      const matchingElements = selectedElement.id
+        ? Array.from(diagramRef.current?.querySelectorAll<SVGElement>(`#${CSS.escape(selectedElement.id)}`) ?? [])
+        : [selectedElement]
+
+      setSelected((current) => {
+        let next = current
+        for (const el of matchingElements) {
+          next = withPaint(withoutPaint(next, el), el, activePaint)
+        }
+        return next
+      })
 
       if (selectedElement.id) {
         try {
           const newState = SEGMENT_STATE_BY_PAINT[activePaint]
-          await updateSegmentState(caseId, selectedElement.id, newState)
           setCaseData((prev) => {
             if (!prev) return prev
             return {
@@ -434,6 +457,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
               },
             }
           })
+          await updateSegmentState(caseId, selectedElement.id, newState)
         } catch (err) {
           console.error('Failed to save segment state:', err)
         }
