@@ -4,7 +4,7 @@ import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import skullFrontSource from '../assets/skull_front.svg?raw'
 import skullLeftSource from '../assets/skull_left.svg?raw'
-import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, ScanFace, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
 import { getCase, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
 
@@ -296,6 +296,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
   const searchSwipeTriggered = useRef(false)
   const isDragging = useRef(false)
+  const panzoomRef = useRef<ReturnType<typeof panzoom> | null>(null)
 
 
   const currentRawSvg = useMemo(() => {
@@ -440,7 +441,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     const container = diagramRef.current
     container?.addEventListener('wheel', handleWheel, { passive: false })
 
+    panzoomRef.current = zoom
+
     return () => {
+      panzoomRef.current = null
       container?.removeEventListener('wheel', handleWheel)
       zoom.destroy()
     }
@@ -500,6 +504,31 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         setTransitionPhase('idle')
       }, 550)
     }, 350)
+  }
+
+  function handleResetView() {
+    if (transitionPhase !== 'idle') return
+
+    // If currently in skull view, return to anterior skeleton view
+    if (activeView !== 'skeleton') {
+      setActiveView('skeleton')
+      setTransitionPhase('idle')
+    }
+
+    // Reset pan and zoom to default scale (1.0) and center position (0, 0)
+    if (panzoomRef.current) {
+      panzoomRef.current.reset({ animate: true })
+    }
+
+    // Ensure all SVG layer transforms are clean and centered
+    const svgs = diagramRef.current?.querySelectorAll<SVGElement>('.diagram-layer svg') ?? []
+    svgs.forEach((s) => {
+      if (s instanceof HTMLElement || s instanceof SVGElement) {
+        if (activeView !== 'skeleton') {
+          s.style.transform = ''
+        }
+      }
+    })
   }
 
   // Marks build up: each click paints another segment in the active colour, and
@@ -719,6 +748,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           >
             <List className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">My Skeletons</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResetView}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Reset to Centered Front Skeleton View"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Reset</span>
           </button>
 
           <button
