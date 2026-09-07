@@ -491,19 +491,20 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   function zoomBackToSkeleton() {
     if (transitionPhase !== 'idle') return
 
-    // Step 1: Fade out skull front SVG and slide up top bar
-    setTransitionPhase('fading-out')
+    // Clear any inline panzoom transform on the skeleton SVG so CSS keyframes zoom out cleanly
+    const skeletonSvg = diagramRef.current?.querySelector('.skeleton-layer svg') as HTMLElement | null
+    if (skeletonSvg) {
+      skeletonSvg.style.transform = ''
+    }
 
-    // Step 2: Once faded out (at 350ms), smoothly zoom out from skull back to full view
+    // Immediately hide the skull layer and start zooming out skeleton and retracting toolbar simultaneously
+    setTransitionPhase('zooming-out')
+
+    // Settle back to standard full skeleton view once animations complete (500ms)
     setTimeout(() => {
       setActiveView('skeleton')
-      setTransitionPhase('zooming-out')
-
-      // Step 3: After 550ms, skeleton is back to standard scale
-      setTimeout(() => {
-        setTransitionPhase('idle')
-      }, 550)
-    }, 350)
+      setTransitionPhase('idle')
+    }, 500)
   }
 
   function handleResetView() {

@@ -327,15 +327,15 @@ input {
     will-change: opacity;
   }
 
-  /* REVERSE PHASE 1: Skull front gently dissolves out */
+  /* REVERSE: Skull front gently dissolves out as skeleton zooms back out */
   .layer-fade-out svg {
     opacity: 0 !important;
-    transition: opacity 350ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
     pointer-events: none;
     will-change: opacity;
   }
 
-  /* REVERSE PHASE 1 (Underneath): Skeleton layer holds zoomed position */
+  /* REVERSE: Skeleton layer holds zoomed position if needed */
   .layer-zoomed-hold svg {
     transform-origin: 48.27% 6.47% !important;
     transform: translate3d(1.73%, 43.53%, 0) scale(7.79) !important;
@@ -343,9 +343,9 @@ input {
     pointer-events: none;
   }
 
-  /* REVERSE PHASE 2: Skeleton layer zooms back out to full view */
+  /* REVERSE: Skeleton layer zooms back out to full view simultaneously with toolbar retraction */
   .layer-zooming-out svg {
-    animation: zoomOutFromSkull 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    animation: zoomOutFromSkull 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
     pointer-events: none;
     will-change: transform;
   }
