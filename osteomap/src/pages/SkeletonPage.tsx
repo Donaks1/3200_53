@@ -5,7 +5,7 @@ import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import skullFrontSource from '../assets/skull_front.svg?raw'
 import skullLeftSource from '../assets/skull_left.svg?raw'
 import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, ScanFace, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
-import { getCase, updateSegmentState, removeSegmentState, setAllSegmentStates } from '../db/caseOperation'
+import { getCase, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
 
 
@@ -119,8 +119,26 @@ function selectionLabel(selected: Element) {
 
 // contains() counts the element itself, so this answers both "is it painted"
 // and "is its bone painted", and returns the colour it is wearing either way.
-function paintOf(selected: PaintedSegment[], element: Element): PaintState | null {
-  return selected.find((entry) => entry.element.contains(element))?.paint ?? null
+// In bone mode, if child zones are painted, checking descendants allows bone mode
+// to detect painted zones and de-select or recolor appropriately.
+function paintOf(
+  selected: PaintedSegment[],
+  element: Element,
+  activePaint?: PaintState,
+): PaintState | null {
+  const ancestorOrSelf = selected.find((entry) => entry.element.contains(element))
+  if (ancestorOrSelf) return ancestorOrSelf.paint
+
+  const childEntries = selected.filter(
+    (entry) => element.contains(entry.element) && entry.element !== element,
+  )
+  if (childEntries.length > 0) {
+    if (activePaint && childEntries.some((entry) => entry.paint === activePaint)) {
+      return activePaint
+    }
+    return childEntries[0].paint
+  }
+  return null
 }
 
 // Painting a whole bone subsumes any of its zones already in the list. Callers
@@ -142,6 +160,9 @@ function withPaint(
 function withoutPaint(selected: PaintedSegment[], element: Element): PaintedSegment[] {
   return selected.flatMap((entry) => {
     if (entry.element === element) return []
+    // If entry is inside element (e.g. element is a bone group and entry is a child zone),
+    // clearing the whole bone clears all child zones inside it.
+    if (element.contains(entry.element)) return []
     if (!entry.element.contains(element)) return [entry]
 
     const remainder: PaintedSegment[] = []
@@ -156,6 +177,88 @@ function withoutPaint(selected: PaintedSegment[], element: Element): PaintedSegm
     }
     return remainder
   })
+}
+
+// Computes atomic updates to segmentStates in IndexedDB and caseData when selecting or
+// de-selecting bones or individual zones.
+// - Selecting/erasing a whole bone subsumes/clears all of its descendant zones.
+// - Selecting/erasing a child zone breaks any stored ancestor bone into all other sibling zones,
+//   preserving their paint state while isolating the target zone.
+function computeUpdatedSegmentStates(
+  currentStates: Record<string, SegmentState>,
+  target: Element,
+  svg: SVGSVGElement,
+  newState: SegmentState | null,
+  rootContainer?: HTMLElement | null,
+): Record<string, SegmentState> {
+  const next = { ...currentStates }
+
+  // 1. Gather all descendant element IDs (child zones/subshapes)
+  const descendantIds: string[] = []
+  target.querySelectorAll('[id]').forEach((child) => {
+    if (child.id && child.id !== target.id) {
+      descendantIds.push(child.id)
+    }
+  })
+
+  // 2. Gather ancestor bone group IDs up to the SVG root (excluding view wrappers and teeth containers)
+  const ancestorBoneIds: string[] = []
+  let curr: Element | null = target.parentElement
+  while (curr && curr !== (svg as Element) && curr.tagName.toLowerCase() !== 'svg') {
+    if (
+      curr.id &&
+      curr.tagName.toLowerCase() === 'g' &&
+      curr.id !== 'skull' &&
+      curr.id !== 'teeth' &&
+      curr.id !== 'teeth_upper' &&
+      curr.id !== 'teeth_lower'
+    ) {
+      ancestorBoneIds.push(curr.id)
+    }
+    curr = curr.parentElement
+  }
+
+  // 3. If any ancestor bone is currently stored in states, break it apart into sibling zones
+  for (const ancestorId of ancestorBoneIds) {
+    if (ancestorId in next) {
+      const parentState = next[ancestorId]
+      delete next[ancestorId]
+
+      // Query parent group instances across mounted SVGs to find all sibling zones
+      const parentElements = rootContainer
+        ? Array.from(rootContainer.querySelectorAll<SVGElement>(`#${CSS.escape(ancestorId)}`))
+        : Array.from(svg.querySelectorAll<SVGElement>(`#${CSS.escape(ancestorId)}`))
+
+      for (const parentEl of parentElements) {
+        parentEl.querySelectorAll('[id]').forEach((child) => {
+          if (
+            child.id &&
+            child.id !== target.id &&
+            child.id !== ancestorId &&
+            !target.contains(child) &&
+            child.tagName.toLowerCase() !== 'g'
+          ) {
+            next[child.id] = parentState
+          }
+        })
+      }
+    }
+  }
+
+  // 4. Update target and clean up descendants
+  if (newState === null) {
+    if (target.id) delete next[target.id]
+    for (const descId of descendantIds) {
+      delete next[descId]
+    }
+  } else {
+    if (target.id) next[target.id] = newState
+    for (const descId of descendantIds) {
+      delete next[descId]
+    }
+  }
+
+  return next
 }
 
 type SearchOption = {
@@ -373,7 +476,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
     // Clearing first is what lets a zone be repainted out of a whole bone: the
     // bone splits into its other zones, then this one goes back in on its own.
-    const covering = paintOf(selected, target)
+    const covering = paintOf(selected, target, activePaint)
     const erasing = covering === activePaint
 
     // Find all matching instances of this segment across all layers (skeleton and skull views)
@@ -393,28 +496,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     if (!target.id) return
 
     try {
-      if (erasing) {
-        setCaseData((prev) => {
-          if (!prev) return prev
-          const next = { ...(prev.segmentStates ?? {}) }
-          delete next[target.id]
-          return { ...prev, segmentStates: next }
-        })
-        await removeSegmentState(caseId, target.id)
-      } else {
-        const newState = SEGMENT_STATE_BY_PAINT[activePaint]
-        setCaseData((prev) => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            segmentStates: {
-              ...(prev.segmentStates ?? {}),
-              [target.id]: newState,
-            },
-          }
-        })
-        await updateSegmentState(caseId, target.id, newState)
-      }
+      const newState = erasing ? null : SEGMENT_STATE_BY_PAINT[activePaint]
+      const nextStates = computeUpdatedSegmentStates(
+        caseData?.segmentStates ?? {},
+        target,
+        svg,
+        newState,
+        diagramRef.current,
+      )
+      setCaseData((prev) => (prev ? { ...prev, segmentStates: nextStates } : prev))
+      await setAllSegmentStates(caseId, nextStates)
     } catch (err) {
       console.error('Failed to update segment state in DB:', err)
     }
@@ -447,17 +538,15 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       if (selectedElement.id) {
         try {
           const newState = SEGMENT_STATE_BY_PAINT[activePaint]
-          setCaseData((prev) => {
-            if (!prev) return prev
-            return {
-              ...prev,
-              segmentStates: {
-                ...(prev.segmentStates ?? {}),
-                [selectedElement.id]: newState,
-              },
-            }
-          })
-          await updateSegmentState(caseId, selectedElement.id, newState)
+          const nextStates = computeUpdatedSegmentStates(
+            caseData?.segmentStates ?? {},
+            selectedElement,
+            svg,
+            newState,
+            diagramRef.current,
+          )
+          setCaseData((prev) => (prev ? { ...prev, segmentStates: nextStates } : prev))
+          await setAllSegmentStates(caseId, nextStates)
         } catch (err) {
           console.error('Failed to save segment state:', err)
         }
@@ -494,7 +583,15 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     try {
       const newStates: Record<string, SegmentState> = { ...(caseData?.segmentStates ?? {}) }
       bones.forEach((bone) => {
-        if (bone.id) newStates[bone.id] = stateToSave
+        if (bone.id) {
+          newStates[bone.id] = stateToSave
+          // Subsume and remove any child zones under this bone
+          bone.querySelectorAll('[id]').forEach((child) => {
+            if (child.id && child.id !== bone.id) {
+              delete newStates[child.id]
+            }
+          })
+        }
       })
       await setAllSegmentStates(caseId, newStates)
       setCaseData((prev) => (prev ? { ...prev, segmentStates: newStates } : prev))
