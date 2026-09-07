@@ -231,24 +231,25 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   useEffect(() => {
     if (!caseData?.segmentStates || transitionPhase !== 'idle') return
 
-    const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
-    const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
-    if (!svg) return
+    const svgs = diagramRef.current?.querySelectorAll<SVGSVGElement>('.diagram-layer svg') ?? []
+    if (!svgs.length) return
 
-    const restored = Object.entries(caseData.segmentStates).flatMap(([segmentId, state]) => {
-      const paint = state ? PAINT_STATE_BY_SEGMENT[state] : undefined
-      // A state with no colour of its own isn't drawable, so it's skipped
-      // rather than guessed at.
-      if (!paint) return []
+    const restored = Array.from(svgs).flatMap((svg) =>
+      Object.entries(caseData.segmentStates).flatMap(([segmentId, state]) => {
+        const paint = state ? PAINT_STATE_BY_SEGMENT[state] : undefined
+        // A state with no colour of its own isn't drawable, so it's skipped
+        // rather than guessed at.
+        if (!paint) return []
 
-      try {
-        const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
-        return element ? [{ element, paint }] : []
-      } catch (e) {
-        console.warn(`Could not select segment #${segmentId}:`, e)
-        return []
-      }
-    })
+        try {
+          const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
+          return element ? [{ element, paint }] : []
+        } catch (e) {
+          console.warn(`Could not select segment #${segmentId}:`, e)
+          return []
+        }
+      })
+    )
 
     setSelected(restored)
   }, [caseData, activeView, transitionPhase])

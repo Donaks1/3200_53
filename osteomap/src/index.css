@@ -194,7 +194,7 @@ input {
     width: 100%;
     height: 100%;
     pointer-events: auto;
-    contain: layout paint;
+    contain: layout;
   }
 
   .layer-hidden {
@@ -204,6 +204,7 @@ input {
   }
 
   svg {
+    overflow: visible;
     height: 100%;
     max-height: 100%;
     width: auto;
@@ -254,16 +255,39 @@ input {
     stroke: var(--paint-edge);
   }
 
-  /* Interactive cues for the skull in the full skeleton view */
-  &:not(.skull-view) #skull {
-    cursor: zoom-in;
+  /* Skull outlines in skeleton layer:
+     Compensate for <g id="skull"> scale(0.247) so that the rendered stroke
+     width equals 0.34px, exactly matching the rest of the skeleton (.front-cls-3). */
+  .skeleton-layer #skull :is(path, polygon, circle, ellipse) {
+    stroke: #000;
+    stroke-width: 1.38px;
   }
 
-  &:not(.skull-view) #skull:hover :is(path, polygon) {
-    fill: #f0f9ff;
-    stroke: #0284c7;
-    stroke-width: 0.65px;
-    transition: fill 0.15s ease, stroke 0.15s ease;
+  .skeleton-layer #skull .is-selected,
+  .skeleton-layer #skull .is-selected :is(path, polygon, circle, ellipse),
+  .skeleton-layer #skull.is-selected :is(path, polygon, circle, ellipse) {
+    fill: var(--bone-selected);
+    stroke: var(--accent);
+    stroke-width: 2.8px;
+  }
+
+  .skeleton-layer #skull .is-selected[data-paint],
+  .skeleton-layer #skull .is-selected[data-paint] :is(path, polygon, circle, ellipse),
+  .skeleton-layer #skull.is-selected[data-paint] :is(path, polygon, circle, ellipse) {
+    fill: var(--paint-fill);
+    stroke: var(--paint-edge);
+    stroke-width: 1.38px;
+  }
+
+  /* Interactive cues for the skull in the full skeleton view:
+     Soft ambient blue glow without overwriting any bone colors or clipping at viewBox boundary */
+  &:not(.skull-view) #skull {
+    cursor: zoom-in;
+    transition: filter 0.25s ease;
+  }
+
+  &:not(.skull-view) #skull:hover {
+    filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
   }
 
   /* PHASE 1: Skeleton layer smoothly zooming in (stays 100% visible while centering) */
