@@ -183,6 +183,14 @@ input {
   width: 100%;
   overflow: hidden;
   position: relative;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   .diagram-layer {
     display: flex;
@@ -195,6 +203,7 @@ input {
     height: 100%;
     pointer-events: auto;
     contain: layout;
+    touch-action: none;
   }
 
   .layer-hidden {
@@ -210,7 +219,7 @@ input {
     width: auto;
     max-width: 100%;
     cursor: pointer;
-    touch-action: pan-y;
+    touch-action: none;
     will-change: transform, opacity;
     transform: translateZ(0);
     backface-visibility: hidden;

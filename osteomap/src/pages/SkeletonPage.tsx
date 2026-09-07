@@ -295,6 +295,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
   const searchSwipeTriggered = useRef(false)
+  const isDragging = useRef(false)
 
 
   const currentRawSvg = useMemo(() => {
@@ -376,6 +377,44 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [sheetOpen])
 
+  // Track whether the pointer movement is a drag/pan rather than a stationary click,
+  // preventing accidental bone selection when panning the canvas.
+  useEffect(() => {
+    const container = diagramRef.current
+    if (!container) return
+
+    let startX = 0
+    let startY = 0
+
+    const onPointerDown = (e: PointerEvent) => {
+      startX = e.clientX
+      startY = e.clientY
+      isDragging.current = false
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 5) {
+        isDragging.current = true
+      }
+    }
+
+    const onPointerUp = () => {
+      setTimeout(() => {
+        isDragging.current = false
+      }, 50)
+    }
+
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
+    window.addEventListener('pointermove', onPointerMove, { capture: true })
+    window.addEventListener('pointerup', onPointerUp, { capture: true })
+
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
+      window.removeEventListener('pointermove', onPointerMove, { capture: true })
+      window.removeEventListener('pointerup', onPointerUp, { capture: true })
+    }
+  }, [])
+
   useEffect(() => {
     if (transitionPhase !== 'idle') return
 
@@ -387,9 +426,24 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       maxScale: 4,
       minScale: 0.5,
       step: 0.25,
+      canvas: true,
+      cursor: 'grab',
+      handleStartEvent: (event) => {
+        event.preventDefault()
+      },
     })
 
-    return () => zoom.destroy()
+    const handleWheel = (event: WheelEvent) => {
+      zoom.zoomWithWheel(event)
+    }
+
+    const container = diagramRef.current
+    container?.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      container?.removeEventListener('wheel', handleWheel)
+      zoom.destroy()
+    }
   }, [activeView, transitionPhase])
 
   // The CSS cascades the highlight from a group down onto its shapes, so the
@@ -455,6 +509,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   // shouldn't wipe out everything marked so far.
   async function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
     if (transitionPhase !== 'idle') return
+    if (isDragging.current) return
 
     const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
     const svg = event.currentTarget.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
