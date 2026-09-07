@@ -308,34 +308,34 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // Step 1: Smoothly zoom into the skull while keeping the skeleton 100% visible
     setTransitionPhase('zooming-in')
 
-    // Step 2: Once fully zoomed in (at 650ms), begin the slow, seamless cross-fade to the skull front SVG
+    // Step 2: At 550ms (as zoom gently settles), begin seamless cross-fade to skull front SVG
     setTimeout(() => {
       setTransitionPhase('fading-in')
 
-      // Step 3: Allow 600ms for the skull front SVG to slowly dissolve into view over the zoomed skull
+      // Step 3: Allow 450ms for skull front SVG to dissolve into view over zoomed skull
       setTimeout(() => {
         setActiveView('skull-front')
         setTransitionPhase('idle')
-      }, 600)
-    }, 650)
+      }, 450)
+    }, 550)
   }
 
   function zoomBackToSkeleton() {
     if (transitionPhase !== 'idle') return
 
-    // Step 1: Fade out the skull front SVG, revealing the zoomed skeleton skull underneath
+    // Step 1: Fade out skull front SVG and slide up top bar
     setTransitionPhase('fading-out')
 
-    // Step 2: Once faded out (at 400ms), smoothly zoom out from the skull back to full view
+    // Step 2: Once faded out (at 350ms), smoothly zoom out from skull back to full view
     setTimeout(() => {
       setActiveView('skeleton')
       setTransitionPhase('zooming-out')
 
-      // Step 3: After 650ms, skeleton is back to standard scale
+      // Step 3: After 550ms, skeleton is back to standard scale
       setTimeout(() => {
         setTransitionPhase('idle')
-      }, 650)
-    }, 400)
+      }, 550)
+    }, 350)
   }
 
   // Marks build up: each click paints another segment in the active colour, and
@@ -509,7 +509,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   return (
     <div className="skeleton-page">
       {/* Top Navigation & Info Header */}
-      <header className="z-20 flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 py-2 shadow-xs backdrop-blur-md">
+      <header className="relative z-30 flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 py-2 shadow-xs backdrop-blur-md">
         <button
           type="button"
           onClick={() => onNavigate('home')}
@@ -555,69 +555,69 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             <ArrowRight className="h-3.5 w-3.5 hidden sm:inline" />
           </button>
         </div>
-      </header>
 
-      {/* Skull View Mode Sub-Bar & Skeleton Quick-access pill */}
-      <div
-        className={[
-          'skull-sub-bar-wrapper',
-          isSkullBarVisible ? 'is-visible' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        aria-hidden={!isSkullBarVisible}
-      >
-        <div className="skull-sub-bar-content flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/90 px-3 py-1.5 backdrop-blur-md shadow-xs">
-          <button
-            type="button"
-            onClick={zoomBackToSkeleton}
-            className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 hover:text-sky-800 transition-all cursor-pointer"
-            title="Return to full skeleton view"
-            tabIndex={isSkullBarVisible ? 0 : -1}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Full Skeleton</span>
-          </button>
-
-          {/* View Toggle: Front vs Left */}
-          <div className="flex items-center rounded-xl border border-sky-200/80 bg-white p-0.5 shadow-xs">
+        {/* Skull View Mode Sub-Bar attached directly to bottom of header */}
+        <div
+          className={[
+            'skull-sub-bar-wrapper',
+            isSkullBarVisible ? 'is-visible' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!isSkullBarVisible}
+        >
+          <div className="skull-sub-bar-content flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/95 px-3 py-1.5 backdrop-blur-md shadow-xs">
             <button
               type="button"
-              onClick={() => setActiveView('skull-front')}
-              className={[
-                'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
-                activeView === 'skull-front'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
-              ].join(' ')}
-              title="View Anterior (Front) Skull"
+              onClick={zoomBackToSkeleton}
+              className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 hover:text-sky-800 transition-all cursor-pointer"
+              title="Return to full skeleton view"
               tabIndex={isSkullBarVisible ? 0 : -1}
             >
-              <ScanFace className="h-3.5 w-3.5" />
-              <span>Front View</span>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Full Skeleton</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('skull-left')}
-              className={[
-                'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
-                activeView === 'skull-left'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
-              ].join(' ')}
-              title="View Lateral (Left) Skull"
-              tabIndex={isSkullBarVisible ? 0 : -1}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              <span>Left View</span>
-            </button>
+
+            {/* View Toggle: Front vs Left */}
+            <div className="flex items-center rounded-xl border border-sky-200/80 bg-white p-0.5 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setActiveView('skull-front')}
+                className={[
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                  activeView === 'skull-front'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
+                ].join(' ')}
+                title="View Anterior (Front) Skull"
+                tabIndex={isSkullBarVisible ? 0 : -1}
+              >
+                <ScanFace className="h-3.5 w-3.5" />
+                <span>Front View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('skull-left')}
+                className={[
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                  activeView === 'skull-left'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
+                ].join(' ')}
+                title="View Lateral (Left) Skull"
+                tabIndex={isSkullBarVisible ? 0 : -1}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span>Left View</span>
+              </button>
+            </div>
+
+            <span className="hidden sm:inline-flex items-center rounded-lg bg-sky-100/80 px-2 py-1 text-[11px] font-semibold text-sky-800">
+              {activeView === 'skull-front' ? 'Skull — Anterior' : 'Skull — Left Lateral'}
+            </span>
           </div>
-
-          <span className="hidden sm:inline-flex items-center rounded-lg bg-sky-100/80 px-2 py-1 text-[11px] font-semibold text-sky-800">
-            {activeView === 'skull-front' ? 'Skull — Anterior' : 'Skull — Left Lateral'}
-          </span>
         </div>
-      </div>
+      </header>
 
       {/* Main Skeleton / Skull Diagram */}
       <div
@@ -639,34 +639,34 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         onClick={handleDiagramClick}
       >
         {/* Layer 1: Skeleton View */}
-        {(activeView === 'skeleton' || transitionPhase !== 'idle') && (
-          <div
-            className={[
-              'diagram-layer skeleton-layer',
-              transitionPhase === 'zooming-in' ? 'layer-zooming-in' : '',
-              transitionPhase === 'fading-in' ? 'layer-zoomed-fade-out' : '',
-              transitionPhase === 'fading-out' ? 'layer-zoomed-hold' : '',
-              transitionPhase === 'zooming-out' ? 'layer-zooming-out' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            dangerouslySetInnerHTML={skeletonFrontMarkup}
-          />
-        )}
+        <div
+          className={[
+            'diagram-layer skeleton-layer',
+            transitionPhase === 'zooming-in' ? 'layer-zooming-in' : '',
+            transitionPhase === 'fading-in' ? 'layer-zoomed-fade-out' : '',
+            transitionPhase === 'fading-out' ? 'layer-zoomed-hold' : '',
+            transitionPhase === 'zooming-out' ? 'layer-zooming-out' : '',
+            activeView !== 'skeleton' && transitionPhase === 'idle' ? 'layer-hidden' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          dangerouslySetInnerHTML={skeletonFrontMarkup}
+        />
 
         {/* Layer 2: Detailed Skull View (Front or Left) */}
-        {(activeView !== 'skeleton' || transitionPhase === 'fading-in' || transitionPhase === 'fading-out') && (
-          <div
-            className={[
-              'diagram-layer skull-layer',
-              transitionPhase === 'fading-in' ? 'layer-fade-in' : '',
-              transitionPhase === 'fading-out' ? 'layer-fade-out' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            dangerouslySetInnerHTML={activeView === 'skull-left' ? skullLeftMarkup : skullFrontMarkup}
-          />
-        )}
+        <div
+          className={[
+            'diagram-layer skull-layer',
+            activeView === 'skeleton' && transitionPhase === 'idle' ? 'layer-hidden' : '',
+            transitionPhase === 'zooming-in' ? 'layer-hidden' : '',
+            transitionPhase === 'fading-in' ? 'layer-fade-in' : '',
+            transitionPhase === 'fading-out' ? 'layer-fade-out' : '',
+            transitionPhase === 'zooming-out' ? 'layer-hidden' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          dangerouslySetInnerHTML={activeView === 'skull-left' ? skullLeftMarkup : skullFrontMarkup}
+        />
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2">
