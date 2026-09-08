@@ -139,23 +139,91 @@ input {
   }
 }
 
+/* Animated top sub-bar for skull view - fully hardware accelerated with 0 layout reflow */
+.skull-sub-bar-wrapper {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.skull-sub-bar-content {
+  opacity: 0;
+  transform: translate3d(0, -100%, 0);
+  box-shadow: 0 4px 14px -2px rgba(14, 165, 233, 0.12);
+  transition:
+    transform 350ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.skull-sub-bar-wrapper.is-visible {
+  pointer-events: auto;
+}
+
+.skull-sub-bar-wrapper.is-visible .skull-sub-bar-content {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+  transition:
+    transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .skeleton-diagram {
   flex: 1;
   min-height: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 6px 8px calc(72px + env(safe-area-inset-bottom));
   width: 100%;
   overflow: hidden;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  .diagram-layer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    inset: 0;
+    padding: 48px 8px calc(72px + env(safe-area-inset-bottom));
+    width: 100%;
+    height: 100%;
+    pointer-events: auto;
+    contain: layout;
+    touch-action: none;
+  }
+
+  .layer-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
 
   svg {
+    overflow: visible;
     height: 100%;
     max-height: 100%;
     width: auto;
     max-width: 100%;
     cursor: pointer;
-    touch-action: pan-y;
+    touch-action: none;
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   /* The SVG's own .front-cls-N rules set fill and stroke on each path, so a
@@ -194,6 +262,114 @@ input {
   .is-selected[data-paint] :is(path, polygon, circle, ellipse) {
     fill: var(--paint-fill);
     stroke: var(--paint-edge);
+  }
+
+  /* Skull outlines in skeleton layer:
+     Compensate for <g id="skull"> scale(0.247) so that the rendered stroke
+     width equals 0.34px, exactly matching the rest of the skeleton (.front-cls-3). */
+  .skeleton-layer #skull :is(path, polygon, circle, ellipse) {
+    stroke: #000;
+    stroke-width: 1.38px;
+  }
+
+  .skeleton-layer #skull .is-selected,
+  .skeleton-layer #skull .is-selected :is(path, polygon, circle, ellipse),
+  .skeleton-layer #skull.is-selected :is(path, polygon, circle, ellipse) {
+    fill: var(--bone-selected);
+    stroke: var(--accent);
+    stroke-width: 2.8px;
+  }
+
+  .skeleton-layer #skull .is-selected[data-paint],
+  .skeleton-layer #skull .is-selected[data-paint] :is(path, polygon, circle, ellipse),
+  .skeleton-layer #skull.is-selected[data-paint] :is(path, polygon, circle, ellipse) {
+    fill: var(--paint-fill);
+    stroke: var(--paint-edge);
+    stroke-width: 1.38px;
+  }
+
+  /* Interactive cues for the skull in the full skeleton view:
+     Soft ambient blue glow without overwriting any bone colors or clipping at viewBox boundary */
+  &:not(.skull-view) #skull {
+    cursor: zoom-in;
+    transition: filter 0.25s ease;
+  }
+
+  &:not(.skull-view) #skull:hover {
+    filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
+  }
+
+  /* PHASE 1: Skeleton layer smoothly zooming in (stays 100% visible while centering) */
+  .layer-zooming-in svg {
+    transform-origin: 48.27% 6.47% !important;
+    transform: translate3d(1.73%, 43.53%, 0) scale(7.79) !important;
+    opacity: 1 !important;
+    transition: transform 550ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  /* PHASE 2: When fully zoomed in, skeleton layer holds at scale 7.79 and gently dissolves out */
+  .layer-zoomed-fade-out svg {
+    transform-origin: 48.27% 6.47% !important;
+    transform: translate3d(1.73%, 43.53%, 0) scale(7.79) !important;
+    opacity: 0 !important;
+    transition: opacity 450ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    pointer-events: none;
+    will-change: opacity;
+  }
+
+  /* PHASE 2 (Top Layer): Skull front SVG slowly and seamlessly fades in directly over the zoomed skull */
+  .layer-fade-in svg {
+    opacity: 1 !important;
+    animation: skullSlowCrossFadeIn 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+    pointer-events: none;
+    will-change: opacity;
+  }
+
+  /* REVERSE: Skull front gently dissolves out as skeleton zooms back out */
+  .layer-fade-out svg {
+    opacity: 0 !important;
+    transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    pointer-events: none;
+    will-change: opacity;
+  }
+
+  /* REVERSE: Skeleton layer holds zoomed position if needed */
+  .layer-zoomed-hold svg {
+    transform-origin: 48.27% 6.47% !important;
+    transform: translate3d(1.73%, 43.53%, 0) scale(7.79) !important;
+    opacity: 1 !important;
+    pointer-events: none;
+  }
+
+  /* REVERSE: Skeleton layer zooms back out to full view simultaneously with toolbar retraction */
+  .layer-zooming-out svg {
+    animation: zoomOutFromSkull 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    pointer-events: none;
+    will-change: transform;
+  }
+}
+
+@keyframes skullSlowCrossFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes zoomOutFromSkull {
+  0% {
+    transform-origin: 48.27% 6.47%;
+    transform: translate3d(1.73%, 43.53%, 0) scale(7.79);
+    opacity: 1;
+  }
+  100% {
+    transform-origin: 48.27% 6.47%;
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
   }
 }
 
