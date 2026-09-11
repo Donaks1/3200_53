@@ -219,6 +219,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     })
 
     setSelected(restored)
+    setUndoStack([])
+    setRedoStack([])
   }, [caseData])
 
   useEffect(() => {
@@ -276,10 +278,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // bone splits into its other zones, then this one goes back in on its own.
     const covering = paintOf(selected, target)
     const erasing = covering === activePaint
-    setSelected((current) => {
-      const cleared = withoutPaint(current, target)
+    const newSelected = (() => {
+      const cleared = withoutPaint(selected, target)
       return erasing ? cleared : withPaint(cleared, target, activePaint)
-    })
+    })()
+    applySelectionChange(newSelected)
 
     if (!target.id) return
 
@@ -302,6 +305,44 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelected(newSelected)
   }
 
+  async function persistSelection(selection: PaintedSegment[]) {
+    const segmentStates: Record<string, SegmentState> = {}
+    selection.forEach(({ element, paint }) => {
+      if (element.id) segmentStates[element.id] = SEGMENT_STATE_BY_PAINT[paint]
+    })
+    await setAllSegmentStates(caseId, segmentStates)
+  }
+
+  async function undo() {
+    if (undoStack.length === 0) return
+
+    const previous = undoStack[undoStack.length - 1]
+    setUndoStack((stack) => stack.slice(0, -1))
+    setRedoStack((stack) => [...stack, selected])
+    setSelected(previous)
+
+    try {
+      await persistSelection(previous)
+    } catch (err) {
+      console.error('Failed to undo segment change:', err)
+    }
+  }
+
+  async function redo() {
+    if (redoStack.length === 0) return
+
+    const next = redoStack[redoStack.length - 1]
+    setRedoStack((stack) => stack.slice(0, -1))
+    setUndoStack((stack) => [...stack, selected])
+    setSelected(next)
+
+    try {
+      await persistSelection(next)
+    } catch (err) {
+      console.error('Failed to redo segment change:', err)
+    }
+  }
+
   async function handleSearchOption(option: SearchOption) {
     const svg = diagramRef.current?.querySelector('svg')
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
@@ -313,9 +354,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     // Paints for the same reason a click does, so picking bones by name and by
     // tapping them can be mixed freely.
     if (selectedElement) {
-      setSelected((current) =>
-        withPaint(withoutPaint(current, selectedElement), selectedElement, activePaint),
-      )
+      const newSelected = withPaint(withoutPaint(selected, selectedElement), selectedElement, activePaint)
+      applySelectionChange(newSelected)
 
       if (selectedElement.id) {
         try {
@@ -349,7 +389,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     const bones = boneOptions
       .map((bone) => svg.querySelector(`#${CSS.escape(bone.id)}`))
       .filter((bone): bone is Element => bone !== null)
-    setSelected(bones.map((element) => ({ element, paint: activePaint })))
+    applySelectionChange(bones.map((element) => ({ element, paint: activePaint })))
 
     const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
     try {
@@ -467,8 +507,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
               <div className="grid grid-cols-4 gap-2">
                 <button
                   type="button"
-                  disabled
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-400"
+                  onClick={undo}
+                  disabled={undoStack.length === 0}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:text-slate-400"
                   aria-label="Undo"
                 >
                   <Undo2 className="h-4 w-4" />
@@ -476,8 +517,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                 </button>
                 <button
                   type="button"
-                  disabled
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-400"
+                  onClick={redo}
+                  disabled={redoStack.length === 0}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-2 py-3 text-xs font-medium text-slate-600 disabled:cursor-not-allowed disabled:text-slate-400"
                   aria-label="Redo"
                 >
                   <Redo2 className="h-4 w-4" />
