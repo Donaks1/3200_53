@@ -158,6 +158,9 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
 
 function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
   const [selected, setSelected] = useState<PaintedSegment[]>([])
+  // These 2 lnes below are variable for the undo/redo button. 
+  const [undoStack, setUndoStack] = useState<PaintedSegment[][]>([])
+  const [redoStack, setRedoStack] = useState<PaintedSegment[][]>([])
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [activePaint, setActivePaint] = useState<PaintState>('present')
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -289,6 +292,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     } catch (err) {
       console.error('Failed to update segment state in DB:', err)
     }
+  }
+
+  function applySelectionChange(
+    newSelected: PaintedSegment[]
+  ) {
+    setUndoStack((stack) => [...stack, selected])
+    setRedoStack([])
+    setSelected(newSelected)
   }
 
   async function handleSearchOption(option: SearchOption) {
