@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Database, Download, House, Info, Upload } from 'lucide-react'
 import type { NavigateFn } from './types'
 import { getCase } from '../db/caseOperation'
 import { getContextById } from '../db/contextOperation'
@@ -63,7 +64,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
           onClick={() => onNavigate('skeleton', caseId || undefined)}
           className="export-header-back"
         >
-          ← Back
+          <ArrowLeft aria-hidden="true" /> Back
         </button>
         <h1 className="export-header-title">Export Record</h1>
         <button 
@@ -71,7 +72,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
           onClick={() => onNavigate('home')}
           className="export-header-home"
         >
-          Home
+          <House aria-hidden="true" /> Home
         </button>
       </header>
 
@@ -89,53 +90,46 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
           </ul>
         </div>
 
-        {/* Added: Structural Warning Text (unpolished, standard alignment) */}
-        <p className="export-reminder">
-          <strong>Notice:</strong> This application operates offline-first. To prevent local browser storage clear-outs from deleting your data, export a backup as a CSV.
-        </p>
+        <div className="export-reminder">
+          <Info aria-hidden="true" />
+          <p>Keep a JSON backup of your records. Clearing your browser storage can delete data saved on this device.</p>
+        </div>
 
-        {/* Action Buttons (Added the second button structurally, but unstyled) */}
-        <div style={{ marginTop: '24px' }}>
+        <section className="export-card export-actions" aria-labelledby="export-actions-title">
+          <h2 id="export-actions-title" className="export-card-title">Export Records</h2>
           <button 
             type="button"
             className="export-button-basic"
             disabled={!caseData}
             onClick={() => caseData && exportSingleCase(caseData.caseId)}
           >
-            Export This Case (.json)
+            <Download aria-hidden="true" /> Export This Case (.json)
           </button>
           
           <button 
             type="button"
-            style={{ 
-              marginTop: '12px', 
-              width: '100%', 
-              padding: '10px 16px', 
-              fontSize: '14px', 
-              borderRadius: '8px',
-              border: '1px dashed var(--border)',
-              background: 'none',
-              color: 'var(--text)',
-              cursor: 'pointer'
-            }}
+            className="export-button-secondary"
             onClick={() => exportDatabase()}
           >
-            Export Full Backup (.json)
+            <Database aria-hidden="true" /> Export Full Backup (.json)
           </button>
-        </div>
+        </section>
 
         {/* Import Section */}
         <div className="export-card">
-          <h2 className="export-card-title">Import Database</h2>
-          <p className="export-card-description">
+          <h2 className="export-card-title"><Upload aria-hidden="true" />Import Database</h2>
+          <p id="export-import-description" className="export-card-description">
             Select a JSON file to import into the application.
           </p>
           <input
             type="file"
+            className="export-file-input"
+            aria-label="Choose a JSON backup to import"
+            aria-describedby="export-import-description"
             accept="application/json"
             onChange={handleImportFile}
           />
-          {importStatus && <p style={{ fontSize: '14px', color: 'var(--text)' }}>{importStatus}</p>}
+          {importStatus && <p className="export-import-status" role="status">{importStatus}</p>}
         </div>
       </main>
     </div>
