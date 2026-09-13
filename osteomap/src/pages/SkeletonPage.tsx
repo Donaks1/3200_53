@@ -4,9 +4,11 @@ import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import skullFrontSource from '../assets/skull_front.svg?raw'
 import skullLeftSource from '../assets/skull_left.svg?raw'
-import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, Undo2, X } from 'lucide-react'
-import { getCase, setAllSegmentStates } from '../db/caseOperation'
 import type { CaseRecord, SegmentState } from '../db/types'
+import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
+import { getCase, setAllSegmentStates, updateCaseMetadata } from '../db/caseOperation'
+import NotesPopup from '../components/NotesPopup'
+
 
 
 const skeletonFront = skeletonFrontSource
@@ -290,6 +292,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const [redoStack, setRedoStack] = useState<PaintedSegment[][]>([])
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [activePaint, setActivePaint] = useState<PaintState>('present')
+  const [notesOpen, setNotesOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -536,6 +539,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       }
     })
   }
+
+  async function handleSaveNotes(notes: string) {
+  if (!caseData) return
+  await updateCaseMetadata(caseId, { fieldNotes: notes })
+  setCaseData({ ...caseData, fieldNotes: notes, dateModified: new Date().toISOString() })
+  setNotesOpen(false)
+}
+
 
   // Marks build up: each click paints another segment in the active colour, and
   // clicking one that already wears that colour wipes it, so the same button
@@ -832,6 +843,17 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
           <button
             type="button"
+            onClick={() => setNotesOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Skeleton Notes"
+          >
+            <StickyNote className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Notes</span>
+          </button>
+
+
+          <button
+            type="button"
             onClick={() => onNavigate('export', caseId)}
             className="flex items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 transition-colors cursor-pointer"
             title="Export Record"
@@ -1112,6 +1134,13 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           </div>
         </div>
       </div>
+      <NotesPopup
+	      isOpen={notesOpen}
+        caseName={caseData?.caseName}
+        initialValue={caseData?.fieldNotes ?? ''}
+        onSave={handleSaveNotes}
+        onCancel={() => setNotesOpen(false)}
+      />
     </div>
   )
 }
