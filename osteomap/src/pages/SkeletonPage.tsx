@@ -303,6 +303,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const searchSwipeTriggered = useRef(false)
   const isDragging = useRef(false)
   const panzoomRef = useRef<ReturnType<typeof panzoom> | null>(null)
+  const restoredViewRef = useRef<{
+    caseId: string
+    activeView: ActiveView
+    transitionPhase: TransitionPhase
+  } | null>(null)
 
 
   const currentRawSvg = useMemo(() => {
@@ -348,6 +353,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   useEffect(() => {
     if (!caseData?.segmentStates || transitionPhase !== 'idle') return
 
+    const restoreKey = { caseId: caseData.caseId, activeView, transitionPhase }
+    const previousRestore = restoredViewRef.current
+    if (
+      previousRestore?.caseId === restoreKey.caseId &&
+      previousRestore.activeView === restoreKey.activeView &&
+      previousRestore.transitionPhase === restoreKey.transitionPhase
+    ) {
+      return
+    }
+
     const svgs = diagramRef.current?.querySelectorAll<SVGSVGElement>('.diagram-layer svg') ?? []
     if (!svgs.length) return
 
@@ -371,6 +386,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelected(restored)
     setUndoStack([])
     setRedoStack([])
+    restoredViewRef.current = restoreKey
   }, [caseData, activeView, transitionPhase])
 
   useEffect(() => {
@@ -634,6 +650,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     selection.forEach(({ element, paint }) => {
       if (element.id) segmentStates[element.id] = SEGMENT_STATE_BY_PAINT[paint]
     })
+    setCaseData((prev) => (prev ? { ...prev, segmentStates } : prev))
     await setAllSegmentStates(caseId, segmentStates)
   }
 
