@@ -4,7 +4,7 @@ import type { NavigateFn } from './types'
 import { getCase } from '../db/caseOperation'
 import { getContextById } from '../db/contextOperation'
 import { getSiteById } from '../db/siteOperation'
-import { exportDatabase, exportSingleCase, importDatabase } from '../db/exportImport'
+import { exportDatabaseCSV, exportSingleCaseCSV, importDatabaseCSV } from '../db/exportImport'
 import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
 import './ExportPage.css'
 
@@ -47,7 +47,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
 
     setImportStatus("Importing...");
     try {
-      await importDatabase(file);
+      await importDatabaseCSV(file);
       setImportStatus("Import successful!");
     } catch {
       setImportStatus("Import failed. Please check the file and try again.");
@@ -92,7 +92,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
 
         <div className="export-reminder">
           <Info aria-hidden="true" />
-          <p>Keep a JSON backup of your records. Clearing your browser storage can delete data saved on this device.</p>
+          <p>Keep a CSV backup of your records. Clearing your browser storage can delete data saved on this device.</p>
         </div>
 
         <section className="export-card export-actions" aria-labelledby="export-actions-title">
@@ -101,17 +101,17 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
             type="button"
             className="export-button-basic"
             disabled={!caseData}
-            onClick={() => caseData && exportSingleCase(caseData.caseId)}
+            onClick={() => caseData && exportSingleCaseCSV(caseData.caseId)}
           >
-            <Download aria-hidden="true" /> Export This Case (.json)
+            <Download aria-hidden="true" /> Export This Case (.csv)
           </button>
           
           <button 
             type="button"
             className="export-button-secondary"
-            onClick={() => exportDatabase()}
+            onClick={() => exportDatabaseCSV()}
           >
-            <Database aria-hidden="true" /> Export Full Backup (.json)
+            <Database aria-hidden="true" /> Export Full Backup (.csv)
           </button>
         </section>
 
@@ -119,14 +119,14 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
         <div className="export-card">
           <h2 className="export-card-title"><Upload aria-hidden="true" />Import Database</h2>
           <p id="export-import-description" className="export-card-description">
-            Select a JSON file to import into the application.
+            Select a CSV file to import into the application.
           </p>
           <input
             type="file"
             className="export-file-input"
-            aria-label="Choose a JSON backup to import"
+            aria-label="Choose a CSV backup to import"
             aria-describedby="export-import-description"
-            accept="application/json"
+            accept="text/csv"
             onChange={handleImportFile}
           />
           {importStatus && <p className="export-import-status" role="status">{importStatus}</p>}
