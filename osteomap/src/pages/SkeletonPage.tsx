@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
+import skeletonBackSource from '../assets/skeleton_back.svg?raw'
 import skullFrontSource from '../assets/skull_front.svg?raw'
 import skullLeftSource from '../assets/skull_left.svg?raw'
 import type { CaseRecord, SegmentState } from '../db/types'
-import { ArrowLeft, ArrowRight, CheckCheck, Eye, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCheck, Eye, FlipHorizontal, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
 import { getCase, setAllSegmentStates, updateCaseMetadata } from '../db/caseOperation'
 import NotesPopup from '../components/NotesPopup'
 
@@ -14,6 +15,18 @@ import NotesPopup from '../components/NotesPopup'
 const skeletonFront = skeletonFrontSource
   .replace(/<\?xml[^?]*\?>/, '') // Strips the XML line of the svg file to prevent confusing HTML parser
   .replaceAll('cls-', 'front-cls-') // Stops the front SVG CSS from clashing with back view
+
+const skeletonBack = skeletonBackSource
+  .replace(/<\?xml[^?]*\?>/, '')
+  .replaceAll('cls-', 'back-cls-')
+  .replaceAll('id="l_femur-2"', 'id="r_femur"')
+  .replaceAll('data-name="l_femur"', 'data-name="r_femur"')
+  .replaceAll('id="r_tibia-2"', 'id="l_tibia"')
+  .replaceAll('data-name="r_tibia"', 'data-name="l_tibia"')
+  .replace(/id="l_femur_([0-9]+)-2"/g, 'id="r_femur_$1"')
+  .replace(/data-name="l_femur_([0-9]+)"/g, 'data-name="r_femur_$1"')
+  .replace(/id="r_tibia_([0-9]+)-2"/g, 'id="l_tibia_$1"')
+  .replace(/data-name="r_tibia_([0-9]+)"/g, 'data-name="l_tibia_$1"')
 
 const skullFront = skullFrontSource
   .replace(/<\?xml[^?]*\?>/, '')
@@ -28,10 +41,11 @@ const skullLeft = skullLeftSource
 // rebuild the whole SVG on every state change — detaching the very node we just
 // selected, and later throwing away any pan/zoom transform sitting on it.
 const skeletonFrontMarkup = { __html: skeletonFront }
+const skeletonBackMarkup = { __html: skeletonBack }
 const skullFrontMarkup = { __html: skullFront }
 const skullLeftMarkup = { __html: skullLeft }
 
-type ActiveView = 'skeleton' | 'skull-front' | 'skull-left'
+type ActiveView = 'skeleton' | 'skeleton-back' | 'skull-front' | 'skull-left'
 
 // Whether a click selects the whole bone or the single zone within it.
 type SelectionMode = 'bone' | 'zone'
@@ -281,7 +295,20 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
     .map((element) => ({ id: element.id, label: boneLabel(element.id) }))
 }
 
-type TransitionPhase = 'idle' | 'zooming-in' | 'fading-in' | 'fading-out' | 'zooming-out'
+type TransitionPhase =
+  | 'idle'
+  | 'zooming-in'
+  | 'fading-in'
+  | 'fading-out'
+  | 'zooming-out'
+  | 'flipping-to-back'
+  | 'flipping-to-front'
+
+function getActiveLayerClass(view: ActiveView): string {
+  if (view === 'skull-front' || view === 'skull-left') return '.skull-layer'
+  if (view === 'skeleton-back') return '.skeleton-back-layer'
+  return '.skeleton-front-layer'
+}
 
 function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
   const [activeView, setActiveView] = useState<ActiveView>('skeleton')
@@ -316,14 +343,22 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         return skullFront
       case 'skull-left':
         return skullLeft
+      case 'skeleton-back':
+        return skeletonBack
       default:
         return skeletonFront
     }
   }, [activeView])
 
+  const isSkullView = activeView === 'skull-front' || activeView === 'skull-left'
   const isSkullBarVisible =
-    (activeView !== 'skeleton' && transitionPhase !== 'fading-out' && transitionPhase !== 'zooming-out') ||
+    (isSkullView && transitionPhase !== 'fading-out' && transitionPhase !== 'zooming-out') ||
     transitionPhase === 'fading-in'
+
+  const isSkeletonView = activeView === 'skeleton' || activeView === 'skeleton-back'
+  const isSkeletonBarVisible =
+    (isSkeletonView && transitionPhase !== 'zooming-in' && transitionPhase !== 'fading-in') ||
+    transitionPhase === 'zooming-out'
 
   const boneOptions = useMemo(() => searchOptionsFromSvg(currentRawSvg, 'bone'), [currentRawSvg])
   const zoneOptions = useMemo(() => searchOptionsFromSvg(currentRawSvg, 'zone'), [currentRawSvg])
@@ -443,12 +478,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   useEffect(() => {
     if (transitionPhase !== 'idle') return
 
-    const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
+    const activeLayer = getActiveLayerClass(activeView)
     const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     if (!svg) return
 
     const zoom = panzoom(svg, {
-      maxScale: 4,
+      maxScale: 6,
       minScale: 0.5,
       step: 0.25,
       canvas: true,
@@ -458,9 +493,27 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       },
     })
 
+    let refocusTimer: ReturnType<typeof setTimeout> | null = null
+    const refocus = () => {
+      // Force Chromium/WebKit to invalidate its cached GPU raster texture
+      // and re-rasterize the vector paths sharply at the new zoom scale
+      svg.style.display = 'none'
+      void svg.getBoundingClientRect()
+      svg.style.display = ''
+    }
+
+    const scheduleRefocus = () => {
+      if (refocusTimer) clearTimeout(refocusTimer)
+      refocusTimer = setTimeout(refocus, 80)
+    }
+
     const handleWheel = (event: WheelEvent) => {
       zoom.zoomWithWheel(event)
+      scheduleRefocus()
     }
+
+    svg.addEventListener('panzoomzoom', scheduleRefocus)
+    svg.addEventListener('panzoomend', refocus)
 
     const container = diagramRef.current
     container?.addEventListener('wheel', handleWheel, { passive: false })
@@ -468,6 +521,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     panzoomRef.current = zoom
 
     return () => {
+      if (refocusTimer) clearTimeout(refocusTimer)
+      svg.removeEventListener('panzoomzoom', scheduleRefocus)
+      svg.removeEventListener('panzoomend', refocus)
       panzoomRef.current = null
       container?.removeEventListener('wheel', handleWheel)
       zoom.destroy()
@@ -531,10 +587,35 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     }, 500)
   }
 
+  function flipSkeletonView(targetView: 'skeleton' | 'skeleton-back') {
+    if (transitionPhase !== 'idle' || activeView === targetView) return
+
+    // Clear any inline panzoom transform on both skeleton SVGs before starting CSS 3D flip
+    const svgs = diagramRef.current?.querySelectorAll<SVGElement>('.skeleton-layer svg') ?? []
+    svgs.forEach((s) => {
+      if (s instanceof HTMLElement || s instanceof SVGElement) {
+        s.style.transform = ''
+      }
+    })
+
+    const phase = targetView === 'skeleton-back' ? 'flipping-to-back' : 'flipping-to-front'
+    setTransitionPhase(phase)
+
+    // At 250ms (when outgoing layer is rotated 90deg edge-on), switch activeView to targetView
+    // and let it rotate from 90deg to 0deg
+    setTimeout(() => {
+      setActiveView(targetView)
+      // Allow remaining 250ms for target view to complete its 3D flip-in and settle
+      setTimeout(() => {
+        setTransitionPhase('idle')
+      }, 250)
+    }, 250)
+  }
+
   function handleResetView() {
     if (transitionPhase !== 'idle') return
 
-    // If currently in skull view, return to anterior skeleton view
+    // If currently in skull view or back view, return to anterior skeleton view
     if (activeView !== 'skeleton') {
       setActiveView('skeleton')
       setTransitionPhase('idle')
@@ -549,9 +630,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     const svgs = diagramRef.current?.querySelectorAll<SVGElement>('.diagram-layer svg') ?? []
     svgs.forEach((s) => {
       if (s instanceof HTMLElement || s instanceof SVGElement) {
-        if (activeView !== 'skeleton') {
-          s.style.transform = ''
-        }
+        s.style.transform = ''
       }
     })
   }
@@ -573,7 +652,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     if (transitionPhase !== 'idle') return
     if (isDragging.current) return
 
-    const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
+    const activeLayer = getActiveLayerClass(activeView)
     const svg = event.currentTarget.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     if (!svg) return
 
@@ -685,7 +764,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   async function handleSearchOption(option: SearchOption) {
-    const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
+    const activeLayer = getActiveLayerClass(activeView)
     const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
       (element) => element.id === option.id,
@@ -752,7 +831,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     )
     if (!confirmed) return
 
-    const activeLayer = activeView === 'skeleton' ? '.skeleton-layer' : '.skull-layer'
+    const activeLayer = getActiveLayerClass(activeView)
     const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     if (!svg) return
 
@@ -942,6 +1021,69 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             </span>
           </div>
         </div>
+
+        {/* Skeleton View Mode Sub-Bar attached directly to bottom of header */}
+        <div
+          className={[
+            'skeleton-sub-bar-wrapper',
+            isSkeletonBarVisible ? 'is-visible' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!isSkeletonBarVisible}
+        >
+          <div className="skeleton-sub-bar-content flex items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-3 py-1.5 backdrop-blur-md shadow-xs">
+            <button
+              type="button"
+              onClick={zoomToSkull}
+              disabled={activeView !== 'skeleton'}
+              className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Zoom to detailed skull view"
+              tabIndex={isSkeletonBarVisible ? 0 : -1}
+            >
+              <ScanFace className="h-3.5 w-3.5 text-sky-600" />
+              <span>Skull View</span>
+            </button>
+
+            {/* View Toggle: Front vs Back */}
+            <div className="flex items-center rounded-xl border border-sky-200/80 bg-white p-0.5 shadow-xs">
+              <button
+                type="button"
+                onClick={() => flipSkeletonView('skeleton')}
+                className={[
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                  activeView === 'skeleton'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
+                ].join(' ')}
+                title="View Anterior (Front) Skeleton"
+                tabIndex={isSkeletonBarVisible ? 0 : -1}
+              >
+                <ScanFace className="h-3.5 w-3.5" />
+                <span>Front View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => flipSkeletonView('skeleton-back')}
+                className={[
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer',
+                  activeView === 'skeleton-back'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50',
+                ].join(' ')}
+                title="View Posterior (Back) Skeleton"
+                tabIndex={isSkeletonBarVisible ? 0 : -1}
+              >
+                <FlipHorizontal className="h-3.5 w-3.5" />
+                <span>Back View</span>
+              </button>
+            </div>
+
+            <span className="hidden sm:inline-flex items-center rounded-lg bg-sky-100/80 px-2 py-1 text-[11px] font-semibold text-sky-800">
+              {activeView === 'skeleton' ? 'Skeleton — Anterior' : 'Skeleton — Posterior'}
+            </span>
+          </div>
+        </div>
       </header>
 
       {/* Main Skeleton / Skull Diagram */}
@@ -949,7 +1091,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         ref={diagramRef}
         className={[
           'skeleton-diagram',
-          activeView !== 'skeleton' && transitionPhase === 'idle' ? 'skull-view' : '',
+          isSkullView && transitionPhase === 'idle' ? 'skull-view' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -957,36 +1099,56 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         aria-label={
           activeView === 'skeleton'
             ? 'Anterior view of the human skeleton'
-            : activeView === 'skull-front'
-              ? 'Anterior view of the human skull'
-              : 'Left lateral view of the human skull'
+            : activeView === 'skeleton-back'
+              ? 'Posterior view of the human skeleton'
+              : activeView === 'skull-front'
+                ? 'Anterior view of the human skull'
+                : 'Left lateral view of the human skull'
         }
         onClick={handleDiagramClick}
       >
-        {/* Layer 1: Skeleton View */}
+        {/* Layer 1: Skeleton Front View */}
         <div
           className={[
-            'diagram-layer skeleton-layer',
+            'diagram-layer skeleton-layer skeleton-front-layer',
             transitionPhase === 'zooming-in' ? 'layer-zooming-in' : '',
             transitionPhase === 'fading-in' ? 'layer-zoomed-fade-out' : '',
             transitionPhase === 'fading-out' ? 'layer-zoomed-hold' : '',
             transitionPhase === 'zooming-out' ? 'layer-zooming-out' : '',
+            transitionPhase === 'flipping-to-back' ? 'layer-flip-out-front' : '',
+            transitionPhase === 'flipping-to-front' ? 'layer-flip-in-front' : '',
             activeView !== 'skeleton' && transitionPhase === 'idle' ? 'layer-hidden' : '',
+            activeView !== 'skeleton' && transitionPhase !== 'flipping-to-front' && transitionPhase !== 'flipping-to-back' && transitionPhase !== 'zooming-in' && transitionPhase !== 'fading-in' && transitionPhase !== 'fading-out' && transitionPhase !== 'zooming-out' ? 'layer-hidden' : '',
           ]
             .filter(Boolean)
             .join(' ')}
           dangerouslySetInnerHTML={skeletonFrontMarkup}
         />
 
-        {/* Layer 2: Detailed Skull View (Front or Left) */}
+        {/* Layer 2: Skeleton Back View */}
+        <div
+          className={[
+            'diagram-layer skeleton-layer skeleton-back-layer',
+            transitionPhase === 'flipping-to-back' ? 'layer-flip-in-back' : '',
+            transitionPhase === 'flipping-to-front' ? 'layer-flip-out-back' : '',
+            activeView !== 'skeleton-back' && transitionPhase === 'idle' ? 'layer-hidden' : '',
+            activeView !== 'skeleton-back' && transitionPhase !== 'flipping-to-back' && transitionPhase !== 'flipping-to-front' ? 'layer-hidden' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          dangerouslySetInnerHTML={skeletonBackMarkup}
+        />
+
+        {/* Layer 3: Detailed Skull View (Front or Left) */}
         <div
           className={[
             'diagram-layer skull-layer',
-            activeView === 'skeleton' && transitionPhase === 'idle' ? 'layer-hidden' : '',
+            isSkeletonView && transitionPhase === 'idle' ? 'layer-hidden' : '',
             transitionPhase === 'zooming-in' ? 'layer-hidden' : '',
             transitionPhase === 'fading-in' ? 'layer-fade-in' : '',
             transitionPhase === 'fading-out' ? 'layer-fade-out' : '',
             transitionPhase === 'zooming-out' ? 'layer-hidden' : '',
+            transitionPhase === 'flipping-to-back' || transitionPhase === 'flipping-to-front' ? 'layer-hidden' : '',
           ]
             .filter(Boolean)
             .join(' ')}
