@@ -273,9 +273,10 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             <button
               className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98"
               onClick={() => setAddingSite(true)}
+              aria-label="Add site"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add
+              <span className="max-[380px]:hidden">Add</span>
             </button>
           </div>
           
@@ -376,9 +377,10 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
               onClick={() => setAddingContext(true)}
               disabled={!currentSite}
+              aria-label="Add context"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add
+              <span className="max-[380px]:hidden">Add</span>
             </button>
           </div>
           
@@ -478,9 +480,10 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
               onClick={startAddCase}
               disabled={!currentContext}
+              aria-label="Add specimen"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add
+              <span className="max-[380px]:hidden">Add</span>
             </button>
           </div>
         
