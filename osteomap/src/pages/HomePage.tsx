@@ -7,8 +7,23 @@ import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/type
 import TextInputPopup from '../components/TextInputPopup'
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import SkeletonPreview from '../components/SkeletonPreview'
+import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User } from 'lucide-react'
 
+function formatDate(isoString?: string): string {
+  if (!isoString) return 'Recently'
+  try {
+    const d = new Date(isoString)
+    if (isNaN(d.getTime())) return isoString
+    return d.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  } catch {
+    return isoString
+  }
+}
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [sites, setSites] = useState<SiteRecord[]>([])
@@ -28,18 +43,70 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const currentContext = contexts.find((c) => c.contextId === contextId)
   const currentCase = cases.find((cas) => cas.caseId === caseId)
 
+  const isSpecimenReady = Boolean(currentSite && currentContext && currentCase)
+  const [prevSelection, setPrevSelection] = useState<{
+    site: SiteRecord
+    context: ContextRecord
+    caseItem: CaseRecord
+  } | null>(null)
+
+  if (currentSite && currentContext && currentCase) {
+    if (
+      prevSelection?.caseItem.caseId !== currentCase.caseId ||
+      prevSelection?.site.siteId !== currentSite.siteId ||
+      prevSelection?.context.contextId !== currentContext.contextId ||
+      prevSelection?.caseItem !== currentCase
+    ) {
+      setPrevSelection({
+        site: currentSite,
+        context: currentContext,
+        caseItem: currentCase,
+      })
+    }
+  }
+
+  const activeCase = isSpecimenReady ? currentCase : prevSelection?.caseItem
+  const activeSite = isSpecimenReady ? currentSite : prevSelection?.site
+  const activeContext = isSpecimenReady ? currentContext : prevSelection?.context
+
+  const activeSegmentStates = activeCase?.segmentStates || {}
+  const activeRecordedBonesCount = Object.keys(activeSegmentStates).length
+  const activeAbsentBonesCount = Object.values(activeSegmentStates).filter((s) => s === 'absent').length
+
   useEffect(() => {
     getAllSites().then(setSites)
   }, [])
 
   useEffect(() => {
-    if (!siteId) return setContexts([])
-    getContextsBySiteId(siteId).then(setContexts)
+    let active = true
+    if (siteId) {
+      getContextsBySiteId(siteId).then((res) => {
+        if (active) setContexts(res)
+      })
+    } else {
+      Promise.resolve().then(() => {
+        if (active) setContexts([])
+      })
+    }
+    return () => {
+      active = false
+    }
   }, [siteId])
 
   useEffect(() => {
-    if (!contextId) return setCases([])
-    getCasesByContext(contextId).then(setCases)
+    let active = true
+    if (contextId) {
+      getCasesByContext(contextId).then((res) => {
+        if (active) setCases(res)
+      })
+    } else {
+      Promise.resolve().then(() => {
+        if (active) setCases([])
+      })
+    }
+    return () => {
+      active = false
+    }
   }, [contextId])
 
 
@@ -354,30 +421,123 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
 
+      {/* Animated Specimen Preview Card Container with smooth expansion */}
+      <div
+        className={`preview-expand-container ${isSpecimenReady ? 'is-expanded' : ''}`}
+        aria-hidden={!isSpecimenReady}
+      >
+        <div className="preview-expand-content">
+          {activeCase && activeSite && activeContext && (
+            <div
+              key={activeCase.caseId}
+              className="mt-6 animate-preview-card overflow-hidden rounded-2xl border border-sky-200/90 bg-gradient-to-br from-white via-sky-50/20 to-slate-50 p-4 sm:p-5 shadow-sm transition-all"
+            >
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
+                {/* Small Skeleton SVG Preview Thumbnail */}
+                <div className="relative flex h-48 sm:h-52 w-full sm:w-36 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50/80 p-2 shadow-inner">
+                  <SkeletonPreview
+                    segmentStates={activeCase.segmentStates}
+                    className="h-full w-full max-h-48"
+                  />
+                  <div className="absolute top-2 left-2 rounded-md bg-slate-900/60 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase backdrop-blur-xs">
+                    Preview
+                  </div>
+                </div>
+
+                {/* Specimen Details & Meta */}
+                <div className="flex flex-1 flex-col justify-between min-w-0 space-y-3">
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                            <Bone className="h-4 w-4" />
+                          </div>
+                          <h3 className="truncate text-lg font-bold text-slate-900">
+                            {activeCase.caseName}
+                          </h3>
+                        </div>
+                        {/* Location breadcrumb */}
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <span className="truncate font-medium text-slate-700">{activeSite.siteName}</span>
+                          <span className="text-slate-300">/</span>
+                          <Layers className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <span className="truncate text-slate-600">{activeContext.contextName}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Metadata badges */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {activeCase.sex && (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize shadow-2xs">
+                          <User className="h-3.5 w-3.5 text-slate-400" />
+                          {activeCase.sex}
+                        </span>
+                      )}
+                      {activeCase.ageGroup && (
+                        <span className="inline-flex items-center rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 capitalize shadow-2xs">
+                          {activeCase.ageGroup}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-2xs">
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                        {activeRecordedBonesCount} bones recorded
+                      </span>
+                      {activeAbsentBonesCount > 0 && (
+                        <span className="inline-flex items-center rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-xs font-semibold text-rose-700 shadow-2xs">
+                          {activeAbsentBonesCount} absent
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Field notes if available */}
+                    {activeCase.fieldNotes && (
+                      <p className="mt-2.5 line-clamp-2 text-xs italic text-slate-500">
+                        "{activeCase.fieldNotes}"
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Action bar inside preview card */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-slate-200/80 pt-3 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      <span>Modified {formatDate(activeCase.dateModified || activeCase.dateCreated)}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('skeleton', activeCase.caseId)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-semibold px-5 py-2.5 shadow-sm transition-all text-sm w-full sm:w-auto cursor-pointer"
+                    >
+                      <span>Open Skeleton</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* nav buttons at bottom */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
-         <button
-          className="border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs"
+        <button
+          className="border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs cursor-pointer"
           onClick={() => onNavigate('my-skeletons')}
         >
           View All Skeletons
         </button>
 
         <button
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
           onClick={() => onNavigate('export')}
         >
           Go to Import Page
         </button>
-
-        {currentSite && currentContext && currentCase && (
-          <button
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-semibold transition-all shadow-sm flex items-center gap-2"
-            onClick={() => onNavigate('skeleton', currentCase.caseId)}
-          >
-            Create Skeleton →
-          </button>
-        )}
       </div>
 
       <TextInputPopup

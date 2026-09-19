@@ -140,7 +140,8 @@ input {
 }
 
 /* Animated top sub-bar for skull view - fully hardware accelerated with 0 layout reflow */
-.skull-sub-bar-wrapper {
+.skull-sub-bar-wrapper,
+.skeleton-sub-bar-wrapper {
   position: absolute;
   top: 100%;
   left: 0;
@@ -150,7 +151,8 @@ input {
   pointer-events: none;
 }
 
-.skull-sub-bar-content {
+.skull-sub-bar-content,
+.skeleton-sub-bar-content {
   opacity: 0;
   transform: translate3d(0, -100%, 0);
   box-shadow: 0 4px 14px -2px rgba(14, 165, 233, 0.12);
@@ -161,11 +163,17 @@ input {
   pointer-events: none;
 }
 
-.skull-sub-bar-wrapper.is-visible {
+.skeleton-sub-bar-content {
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.08);
+}
+
+.skull-sub-bar-wrapper.is-visible,
+.skeleton-sub-bar-wrapper.is-visible {
   pointer-events: auto;
 }
 
-.skull-sub-bar-wrapper.is-visible .skull-sub-bar-content {
+.skull-sub-bar-wrapper.is-visible .skull-sub-bar-content,
+.skeleton-sub-bar-wrapper.is-visible .skeleton-sub-bar-content {
   opacity: 1;
   transform: translate3d(0, 0, 0);
   pointer-events: auto;
@@ -220,10 +228,8 @@ input {
     max-width: 100%;
     cursor: pointer;
     touch-action: none;
-    will-change: transform, opacity;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
   }
 
   /* The SVG's own .front-cls-N rules set fill and stroke on each path, so a
@@ -349,6 +355,75 @@ input {
     pointer-events: none;
     will-change: transform;
   }
+
+  /* 3D Perspective Flip Animations for Skeleton Front <-> Back View */
+  .layer-flip-out-front svg {
+    animation: flipOutToBack 250ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  .layer-flip-in-back svg {
+    animation: flipInFromFront 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  .layer-flip-out-back svg {
+    animation: flipOutToFront 250ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  .layer-flip-in-front svg {
+    animation: flipInFromBack 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+}
+
+@keyframes flipOutToBack {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(-90deg) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes flipInFromFront {
+  0% {
+    transform: perspective(1200px) rotateY(90deg) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes flipOutToFront {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(90deg) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes flipInFromBack {
+  0% {
+    transform: perspective(1200px) rotateY(-90deg) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes skullSlowCrossFadeIn {
@@ -408,6 +483,53 @@ input {
   svg [data-preview-state='fragmentary'] :is(path, polygon, circle, ellipse) {
     fill: #3b82f6 !important;
     stroke: #1d4ed8 !important;
+  }
+}
+
+/* Specimen Preview Card entrance and smooth container expansion */
+@keyframes previewFadeScaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-preview-card {
+  animation: previewFadeScaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.preview-expand-container {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: grid-template-rows 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.32s ease,
+              transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.preview-expand-container.is-expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.preview-expand-content {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-preview-card,
+  .preview-expand-container {
+    animation: none;
+    transition: none;
   }
 }
 
