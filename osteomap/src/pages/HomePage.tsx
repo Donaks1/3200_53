@@ -536,7 +536,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
           onClick={() => onNavigate('export')}
         >
-          Go to Import Page
+          Import / Export
         </button>
       </div>
 
