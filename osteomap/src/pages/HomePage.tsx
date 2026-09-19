@@ -233,17 +233,26 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-4">
-      <div className="mb-4">
-        <h1 className="text-lg font-bold text-slate-900 mb-1">OsteoMap</h1>
-        <p className="text-sm text-slate-500">
-          {currentSite?.siteName}
-          {currentContext ? ' > ' + currentContext.contextName : ''}
-          {currentCase ? ' > ' + currentCase.caseName : ''}
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 text-left">
+      <header className="border-b border-slate-200/80 bg-white/90 px-4 py-3.5 shadow-xs backdrop-blur-md">
+        <div className="mx-auto max-w-5xl">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+              <Bone className="h-4.5 w-4.5" />
+            </div>
+            <div className="min-w-0 max-w-full">
+              <h1 className="text-lg font-bold text-slate-900">OsteoMap</h1>
+              <p className="truncate text-xs text-slate-500">
+                {currentSite?.siteName || 'Select a site'}
+                {currentContext ? ' / ' + currentContext.contextName : ''}
+                {currentCase ? ' / ' + currentCase.caseName : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
 
-
+      <main className="mx-auto max-w-5xl px-4 pt-6">
       <div className="flex flex-col gap-4 sm:flex-row">
         {/* Site column */}
         <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
@@ -576,6 +585,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         onCancel={cancelAddCase}
       />
 
+      </main>
     </div>
   )
 }
