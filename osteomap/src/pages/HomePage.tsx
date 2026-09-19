@@ -8,7 +8,7 @@ import TextInputPopup from '../components/TextInputPopup'
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
 import SkeletonPreview from '../components/SkeletonPreview'
-import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User } from 'lucide-react'
+import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User, List, FileJson } from 'lucide-react'
 
 function formatDate(isoString?: string): string {
   if (!isoString) return 'Recently'
@@ -526,16 +526,18 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
       {/* nav buttons at bottom */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
-          className="border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 border border-sky-600 bg-sky-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-sky-700 transition-colors shadow-xs cursor-pointer"
           onClick={() => onNavigate('my-skeletons')}
         >
+          <List className="h-4 w-4" />
           View All Skeletons
         </button>
 
         <button
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
           onClick={() => onNavigate('export')}
         >
+          <FileJson className="h-4 w-4" />
           Import / Export
         </button>
       </div>
