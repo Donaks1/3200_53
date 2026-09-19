@@ -4,11 +4,10 @@ import { createSite, getAllSites, updateSite, deleteSite } from '../db/siteOpera
 import { createContext, getContextsBySiteId, updateContext, deleteContext } from '../db/contextOperation'
 import { createCase, getCasesByContext, updateCaseMetadata, deleteCase } from '../db/caseOperation'
 import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/types'
-import TextInputPopup from '../components/TextInputPopup'
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
 import SkeletonPreview from '../components/SkeletonPreview'
-import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User, List, FileJson } from 'lucide-react'
+import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
 
 function formatDate(isoString?: string): string {
   if (!isoString) return 'Recently'
@@ -33,9 +32,12 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [contextId, setContextId] = useState<string | null>(null)
   const [caseId, setCaseId] = useState<string | null>(null)
 
-  const [PopSite, setPopSite] = useState(false)
-  const [PopCxt, setPopCxt] = useState(false)
-  const [showCaseNamePopup, setShowCaseNamePopup] = useState(false)
+  const [addingSite, setAddingSite] = useState(false)
+  const [addingContext, setAddingContext] = useState(false)
+  const [addingCase, setAddingCase] = useState(false)
+  const [siteDraft, setSiteDraft] = useState('')
+  const [contextDraft, setContextDraft] = useState('')
+  const [caseDraft, setCaseDraft] = useState('')
   const [PopMeta, setPopMeta] = useState(false)
   const [TempName, setTempName] = useState('')
 
@@ -112,12 +114,15 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
   // --- Site buttons ---
   async function addSite(name: string) {
-    const site = await createSite(name)
+    const nextName = name.trim()
+    if (!nextName) return
+    const site = await createSite(nextName)
     setSites((prev) => [...prev, site])
     setSiteId(site.siteId)
     setContextId(null)
     setCaseId(null)
-    setPopSite(false)
+    setSiteDraft('')
+    setAddingSite(false)
   }
 
 
@@ -145,11 +150,14 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   // --- Context buttons ---
   async function addContext(name: string) {
     if (!currentSite) return
-    const newContext = await createContext(name, currentSite.siteId)
+    const nextName = name.trim()
+    if (!nextName) return
+    const newContext = await createContext(nextName, currentSite.siteId)
     setContexts((prev) => [...prev, newContext])
     setContextId(newContext.contextId)
     setCaseId(null)
-    setPopCxt(false)
+    setContextDraft('')
+    setAddingContext(false)
   }
 
 
@@ -179,13 +187,16 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   //Case buttons
   function startAddCase() {
     if (!currentContext) return
-    setShowCaseNamePopup(true)
+    setAddingCase(true)
   }
 
 
  function handleCaseNameSave(name: string) {
-    setTempName(name)
-    setShowCaseNamePopup(false)
+    const nextName = name.trim()
+    if (!nextName) return
+    setTempName(nextName)
+    setCaseDraft('')
+    setAddingCase(false)
     setPopMeta(true)
   }
 
@@ -204,8 +215,9 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
   function cancelAddCase() {
-    setShowCaseNamePopup(false)
+    setAddingCase(false)
     setPopMeta(false)
+    setCaseDraft('')
     setTempName('')
   }
 
@@ -260,7 +272,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             <b className="text-sm font-bold text-slate-900">Site</b>
             <button
               className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98"
-              onClick={() => setPopSite(true)}
+              onClick={() => setAddingSite(true)}
             >
               <Plus className="h-3.5 w-3.5" />
               Add
@@ -268,6 +280,50 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           </div>
           
            
+          {sites.length === 0 && (
+            <p className="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-400">
+              Type in your first site below.
+            </p>
+          )}
+
+          {(sites.length === 0 || addingSite) && (
+            <form
+              className="mb-2 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/60 p-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                addSite(siteDraft)
+              }}
+            >
+              <input
+                value={siteDraft}
+                onChange={(event) => setSiteDraft(event.target.value)}
+                placeholder="Site name"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <button
+                type="submit"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                disabled={!siteDraft.trim()}
+                aria-label="Create site"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              {sites.length > 0 && (
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                  onClick={() => {
+                    setAddingSite(false)
+                    setSiteDraft('')
+                  }}
+                  aria-label="Cancel site entry"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+          )}
+
           {sites.map((s) => (
             <div
               key={s.siteId}
@@ -318,7 +374,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
             <b className="text-sm font-bold text-slate-900">Context</b>
             <button
               className="flex items-center gap-1 rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition-colors active:scale-98 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
-              onClick={() => setPopCxt(true)}
+              onClick={() => setAddingContext(true)}
               disabled={!currentSite}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -327,7 +383,49 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           </div>
           
 
-          {!currentSite && <p className="text-sm text-slate-400">pick a site first</p>}
+          {!currentSite && <p className="text-sm text-slate-400">Pick a site first.</p>}
+          {currentSite && contexts.length === 0 && (
+            <p className="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-400">
+              Type in the first context for this site below.
+            </p>
+          )}
+          {currentSite && (contexts.length === 0 || addingContext) && (
+            <form
+              className="mb-2 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/60 p-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                addContext(contextDraft)
+              }}
+            >
+              <input
+                value={contextDraft}
+                onChange={(event) => setContextDraft(event.target.value)}
+                placeholder="Context name"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <button
+                type="submit"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                disabled={!contextDraft.trim()}
+                aria-label="Create context"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              {contexts.length > 0 && (
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                  onClick={() => {
+                    setAddingContext(false)
+                    setContextDraft('')
+                  }}
+                  aria-label="Cancel context entry"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+          )}
           {contexts.map((c) => (
             <div
               key={c.contextId}
@@ -387,7 +485,49 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           </div>
         
           
-          {!currentContext && <p className="text-sm text-slate-400">pick a context first</p>}
+          {!currentContext && <p className="text-sm text-slate-400">Pick a context first.</p>}
+          {currentContext && cases.length === 0 && (
+            <p className="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-sm text-slate-400">
+              Type in your first specimen ID below.
+            </p>
+          )}
+          {currentContext && (cases.length === 0 || addingCase) && (
+            <form
+              className="mb-2 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/60 p-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                handleCaseNameSave(caseDraft)
+              }}
+            >
+              <input
+                value={caseDraft}
+                onChange={(event) => setCaseDraft(event.target.value)}
+                placeholder="Specimen ID"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <button
+                type="submit"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                disabled={!caseDraft.trim()}
+                aria-label="Continue specimen creation"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              {cases.length > 0 && (
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                  onClick={() => {
+                    setAddingCase(false)
+                    setCaseDraft('')
+                  }}
+                  aria-label="Cancel specimen entry"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+          )}
           {cases.map((cas) => (
             <div
               key={cas.caseId}
@@ -550,33 +690,6 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           Import / Export
         </button>
       </div>
-
-      <TextInputPopup
-        isOpen={PopSite}
-        title="New Site"
-        label="Site name"
-        placeholder="Enter site name"
-        onSave={addSite}
-        onCancel={() => setPopSite(false)}
-      />
-
-      <TextInputPopup
-        isOpen={PopCxt}
-        title="New Context"
-        label="Context name"
-        placeholder="Enter context name"
-        onSave={addContext}
-        onCancel={() => setPopCxt(false)}
-      />
-
-      <TextInputPopup
-        isOpen={showCaseNamePopup}
-        title="New Specimen"
-        label="Specimen ID"
-        placeholder="Enter specimen ID"
-        onSave={handleCaseNameSave}
-        onCancel={cancelAddCase}
-      />
 
       <Metadata
         isOpen={PopMeta}
