@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import type { NavigateFn } from './types'
-import { getAllCases, deleteCase } from '../db/caseOperation'
+import { getAllCases, deleteCase, updateCaseMetadata } from '../db/caseOperation'
 import { getAllSites } from '../db/siteOperation'
 import { db } from '../db/db'
 import type { CaseRecord, SiteRecord, ContextRecord } from '../db/types'
@@ -17,7 +17,10 @@ import {
   Layers, 
   Plus, 
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Pencil,
+  X,
+  Check
 } from 'lucide-react'
 
 interface MySkeletonsProps {
@@ -49,6 +52,11 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'recent' | 'name'>('recent')
+  const [editingSkeleton, setEditingSkeleton] = useState<SkeletonItem | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editSex, setEditSex] = useState('')
+  const [editAgeGroup, setEditAgeGroup] = useState<SkeletonItem['ageGroup']>('adult')
+  const [editNotes, setEditNotes] = useState('')
 
   useEffect(() => {
     let active = true
@@ -106,6 +114,53 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
     } catch (err) {
       console.error('Failed to delete skeleton:', err)
       alert('Could not delete skeleton. Please try again.')
+    }
+  }
+
+  function startEdit(item: SkeletonItem, event: React.MouseEvent) {
+    event.stopPropagation()
+    setEditingSkeleton(item)
+    setEditName(item.caseName)
+    setEditSex(item.sex || 'unknown')
+    setEditAgeGroup(item.ageGroup || 'adult')
+    setEditNotes(item.fieldNotes || '')
+  }
+
+  function cancelEdit() {
+    setEditingSkeleton(null)
+    setEditName('')
+    setEditSex('')
+    setEditAgeGroup('adult')
+    setEditNotes('')
+  }
+
+  async function handleEditSave() {
+    if (!editingSkeleton) return
+
+    const nextName = editName.trim()
+    if (!nextName) return
+
+    try {
+      const updates = {
+        caseName: nextName,
+        sex: editSex || 'unknown',
+        ageGroup: editAgeGroup,
+        fieldNotes: editNotes,
+      }
+
+      await updateCaseMetadata(editingSkeleton.caseId, updates)
+      const dateModified = new Date().toISOString()
+      setSkeletons((prev) =>
+        prev.map((item) =>
+          item.caseId === editingSkeleton.caseId
+            ? { ...item, ...updates, dateModified }
+            : item,
+        ),
+      )
+      cancelEdit()
+    } catch (err) {
+      console.error('Failed to update skeleton:', err)
+      alert('Could not update skeleton. Please try again.')
     }
   }
 
@@ -274,6 +329,16 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
                       <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
                         <button
                           type="button"
+                          onClick={(e) => startEdit(item, e)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          title="Edit skeleton"
+                          aria-label="Edit skeleton"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation()
                             onNavigate('export', item.caseId)
@@ -351,6 +416,111 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
           </div>
         )}
       </main>
+
+      {editingSkeleton && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6 backdrop-blur-sm"
+          onClick={cancelEdit}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                    <Bone className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-bold text-slate-900">Edit skeleton</h2>
+                    <p className="truncate text-xs font-medium text-slate-500">
+                      {editingSkeleton.siteName} / {editingSkeleton.contextName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white hover:text-slate-700"
+                  onClick={cancelEdit}
+                  aria-label="Close edit skeleton"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <label className="block text-sm font-semibold text-slate-700">
+                Skeleton ID
+                <input
+                  value={editName}
+                  onChange={(event) => setEditName(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Skeleton ID"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-700">
+                Sex
+                <select
+                  value={editSex}
+                  onChange={(event) => setEditSex(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                </select>
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-700">
+                Age group
+                <select
+                  value={editAgeGroup}
+                  onChange={(event) => setEditAgeGroup(event.target.value as SkeletonItem['ageGroup'])}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="infant">Infant</option>
+                  <option value="child">Child</option>
+                  <option value="adolescent">Adolescent</option>
+                  <option value="adult">Adult</option>
+                </select>
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-700">
+                General notes
+                <textarea
+                  value={editNotes}
+                  onChange={(event) => setEditNotes(event.target.value)}
+                  className="mt-1.5 min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  rows={4}
+                  placeholder="Field notes, condition, provenance, etc."
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-100"
+                onClick={cancelEdit}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                onClick={handleEditSave}
+                disabled={!editName.trim()}
+              >
+                <Check className="h-4 w-4" />
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
