@@ -5,8 +5,9 @@ import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import skeletonBackSource from '../assets/skeleton_back.svg?raw'
 import skullFrontSource from '../assets/skull_front.svg?raw'
 import skullLeftSource from '../assets/skull_left.svg?raw'
+import ribsSpineFrontSource from '../assets/ribs_spine_front.svg?raw'
 import type { CaseRecord, SegmentState } from '../db/types'
-import { ArrowLeft, ArrowRight, CheckCheck, Eye, FlipHorizontal, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bone, CheckCheck, Eye, FlipHorizontal, List, Maximize2, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
 import { getCase, setAllSegmentStates, updateCaseMetadata } from '../db/caseOperation'
 import NotesPopup from '../components/NotesPopup'
 
@@ -36,6 +37,63 @@ const skullLeft = skullLeftSource
   .replace(/<\?xml[^?]*\?>/, '')
   .replaceAll('cls-', 'skull-left-cls-')
 
+// The ribs/spine export is the same artwork as the #spine_ribs group inside
+// skeleton_front.svg, so the two have to agree on ids: a rib painted here is
+// stored under that id and repainted in the full skeleton view from it.
+// Illustrator writes underscores as _x5F_ here and numbers the cartilage one
+// behind the skeleton file (cartilage1 there is cartilage-2 in skeleton_front),
+// so both are normalised back before anything else looks at the markup.
+const ribsSpineNormalised = ribsSpineFrontSource
+  .replace(/<\?xml[^?]*\?>/, '')
+  .replaceAll('_x5F_', '_')
+  .replace(/id="cartilage(\d+)"/g, (_match, index) => `id="cartilage-${Number(index) + 1}"`)
+  .replace(/class="st(\d+)"/g, 'class="ribs-st$1"')
+  .replace(/\.st(\d+)\b/g, '.ribs-st$1')
+
+// Every shape in this view is a bone in its own right — one rib, one vertebra,
+// one cartilage pad — but the export leaves them as loose paths inside
+// #l_ribs / #thoracic_vertebrae and friends, which would make bone mode select
+// a whole rib cage at a time. Wrapping each path in a group named after it is
+// what the rest of the page already understands as "a bone with one zone", so
+// selection, isolation and labelling all fall out of the existing model. Extra
+// zones authored inside a rib in Illustrator land inside the same group and
+// start working without any further change here.
+function groupRibsAndVertebrae(markup: string): string {
+  const document = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  const svg = document.documentElement
+
+  // The root carries id="spine_ribs", which is also a paintable group in the
+  // skeleton view — leaving it would let a click there paint the whole cage.
+  svg.removeAttribute('id')
+
+  // Rib 1 is exported as a group alongside its cage rather than inside it.
+  // It already has the shape we want, it just belongs one level down.
+  for (const side of ['l', 'r']) {
+    const cage = document.getElementById(`${side}_ribs`)
+    const firstRib = document.getElementById(`${side}_rib1`)
+    if (cage && firstRib && firstRib.parentElement !== cage) cage.append(firstRib)
+  }
+
+  for (const containerId of ['l_ribs', 'r_ribs', 'thoracic_vertebrae', 'lumbar_vertebrae', 'cervical_vertebrae']) {
+    const container = document.getElementById(containerId)
+    if (!container) continue
+
+    for (const child of [...container.children]) {
+      if (child.tagName.toLowerCase() === 'g' || !child.id) continue
+
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+      group.id = child.id
+      child.id = `${child.id}_1`
+      child.replaceWith(group)
+      group.append(child)
+    }
+  }
+
+  return new XMLSerializer().serializeToString(svg)
+}
+
+const ribsSpineFront = groupRibsAndVertebrae(ribsSpineNormalised)
+
 // Hoisted so the prop keeps the same object identity across renders. React 19
 // compares dangerouslySetInnerHTML by reference, so an inline literal would
 // rebuild the whole SVG on every state change — detaching the very node we just
@@ -44,8 +102,14 @@ const skeletonFrontMarkup = { __html: skeletonFront }
 const skeletonBackMarkup = { __html: skeletonBack }
 const skullFrontMarkup = { __html: skullFront }
 const skullLeftMarkup = { __html: skullLeft }
+const ribsSpineFrontMarkup = { __html: ribsSpineFront }
 
-type ActiveView = 'skeleton' | 'skeleton-back' | 'skull-front' | 'skull-left'
+type ActiveView = 'skeleton' | 'skeleton-back' | 'skull-front' | 'skull-left' | 'ribs-front'
+
+// Which detail drawing the skeleton view zooms into, and which layer the zoom
+// animation aims at. Held separately from the view because the animation runs
+// while the view is still 'skeleton'.
+type DetailTarget = 'skull' | 'ribs'
 
 // Whether a click selects the whole bone or the single zone within it.
 type SelectionMode = 'bone' | 'zone'
@@ -110,6 +174,7 @@ function boneLabel(id: string) {
   const words = id
     .replace(/^l_/, 'left_')
     .replace(/^r_/, 'right_')
+    .replace(/rib(\d)/, 'rib $1')
     .replaceAll(/[_-]/g, ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
@@ -306,12 +371,132 @@ type TransitionPhase =
 
 function getActiveLayerClass(view: ActiveView): string {
   if (view === 'skull-front' || view === 'skull-left') return '.skull-layer'
+  if (view === 'ribs-front') return '.ribs-layer'
   if (view === 'skeleton-back') return '.skeleton-back-layer'
   return '.skeleton-front-layer'
 }
 
+// Ribs are the one thing in the ribs view that a click opens rather than paints,
+// so they need to be recognisable before selectionAt() gets a say. Matches the
+// per-rib groups built by groupRibsAndVertebrae, at any depth inside them.
+const RIB_ID = /^[lr]_rib\d{1,2}$/
+
+function ribGroupAt(target: Element): Element | null {
+  let node: Element | null = target
+  while (node) {
+    if (node.id && RIB_ID.test(node.id)) return node
+    node = node.parentElement
+  }
+  return null
+}
+
+type ViewBox = { x: number; y: number; width: number; height: number }
+
+function parseViewBox(value: string | null): ViewBox | null {
+  const parts = value?.trim().split(/[\s,]+/).map(Number)
+  if (!parts || parts.length !== 4 || parts.some(Number.isNaN)) return null
+  return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+}
+
+const formatViewBox = (box: ViewBox) => `${box.x} ${box.y} ${box.width} ${box.height}`
+
+// Frames a box centred with `fill` of the result given over to it. An `aspect`,
+// where given, is forced on the frame: the drawing as a whole keeps the
+// proportions it was laid out from, so the rib cage sits where the eye expects
+// it. A single rib is framed at its own proportions instead and left to the
+// SVG's own xMidYMid fit, which is what makes a short, wide rib grow to the
+// full width of the viewport rather than to the width of a body-shaped column.
+function frameBox(box: ViewBox, fill: number, aspect?: number): ViewBox {
+  const centreX = box.x + box.width / 2
+  const centreY = box.y + box.height / 2
+  let width = box.width / fill
+  let height = box.height / fill
+
+  if (aspect) {
+    if (width / height < aspect) width = height * aspect
+    else height = width / aspect
+  }
+
+  return { x: centreX - width / 2, y: centreY - height / 2, width, height }
+}
+
+// getBBox() is in the element's own user units, which is the same space the
+// viewBox is written in as long as nothing between it and the root is
+// transformed — true of this drawing, and worth knowing if that ever changes.
+function boundsOf(element: SVGGraphicsElement): ViewBox | null {
+  try {
+    const box = element.getBBox()
+    if (!box.width || !box.height) return null
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
+  } catch {
+    return null
+  }
+}
+
+// Shows one element and nothing else by hiding, at every level from the element
+// up to the root, everything that isn't on that path. Walking up rather than
+// hiding a flat list of siblings is what lets it isolate a rib that sits two
+// groups deep without also hiding the groups it lives in.
+function isolateElement(svg: SVGSVGElement, target: Element | null) {
+  svg.querySelectorAll<SVGElement>('[data-isolated-away]').forEach((element) => {
+    element.style.removeProperty('display')
+    element.removeAttribute('data-isolated-away')
+  })
+
+  if (!target) return
+
+  let node: Element = target
+  while (node.parentElement && node !== svg) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || sibling.tagName.toLowerCase() === 'defs') continue
+      if (!(sibling instanceof SVGElement)) continue
+      sibling.style.display = 'none'
+      sibling.setAttribute('data-isolated-away', '')
+    }
+    node = node.parentElement
+  }
+}
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+
+// The viewBox is an attribute rather than a style, so CSS can't transition it.
+// Interpolating it by hand keeps the move into and out of a single rib as smooth
+// as the other view changes. Returns a canceller so a second click mid-flight
+// doesn't leave two animations fighting over the same attribute.
+function animateViewBox(svg: SVGSVGElement, to: ViewBox, duration = 420): () => void {
+  const from = parseViewBox(svg.getAttribute('viewBox'))
+  if (!from) {
+    svg.setAttribute('viewBox', formatViewBox(to))
+    return () => {}
+  }
+
+  let frame = 0
+  const start = performance.now()
+
+  const step = (now: number) => {
+    const progress = Math.min((now - start) / duration, 1)
+    const eased = easeInOut(progress)
+    svg.setAttribute(
+      'viewBox',
+      formatViewBox({
+        x: from.x + (to.x - from.x) * eased,
+        y: from.y + (to.y - from.y) * eased,
+        width: from.width + (to.width - from.width) * eased,
+        height: from.height + (to.height - from.height) * eased,
+      }),
+    )
+    if (progress < 1) frame = requestAnimationFrame(step)
+  }
+
+  frame = requestAnimationFrame(step)
+  return () => cancelAnimationFrame(frame)
+}
+
 function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
   const [activeView, setActiveView] = useState<ActiveView>('skeleton')
+  const [detailTarget, setDetailTarget] = useState<DetailTarget>('skull')
+  // The rib currently shown on its own, by id. Null is the whole rib cage.
+  const [isolatedRibId, setIsolatedRibId] = useState<string | null>(null)
   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle')
   const [selected, setSelected] = useState<PaintedSegment[]>([])
   // These 2 lnes below are variable for the undo/redo button. 
@@ -330,6 +515,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const searchSwipeTriggered = useRef(false)
   const isDragging = useRef(false)
   const panzoomRef = useRef<ReturnType<typeof panzoom> | null>(null)
+  // The ribs drawing keeps the full skeleton's coordinate space, so its own
+  // artwork sits in a corner of a mostly empty viewBox. The framing measured on
+  // first paint is what the view falls back to whenever a rib is closed.
+  const ribsBaseViewBoxRef = useRef<ViewBox | null>(null)
   const restoredViewRef = useRef<{
     caseId: string
     activeView: ActiveView
@@ -343,6 +532,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         return skullFront
       case 'skull-left':
         return skullLeft
+      case 'ribs-front':
+        return ribsSpineFront
       case 'skeleton-back':
         return skeletonBack
       default:
@@ -351,9 +542,16 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }, [activeView])
 
   const isSkullView = activeView === 'skull-front' || activeView === 'skull-left'
+  const isRibsView = activeView === 'ribs-front'
+  const isDetailView = isSkullView || isRibsView
+
   const isSkullBarVisible =
     (isSkullView && transitionPhase !== 'fading-out' && transitionPhase !== 'zooming-out') ||
-    transitionPhase === 'fading-in'
+    (detailTarget === 'skull' && transitionPhase === 'fading-in')
+
+  const isRibsBarVisible =
+    (isRibsView && transitionPhase !== 'fading-out' && transitionPhase !== 'zooming-out') ||
+    (detailTarget === 'ribs' && transitionPhase === 'fading-in')
 
   const isSkeletonView = activeView === 'skeleton' || activeView === 'skeleton-back'
   const isSkeletonBarVisible =
@@ -530,6 +728,39 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     }
   }, [activeView, transitionPhase])
 
+  // Drives both halves of the single-rib view: what stays on screen, and where
+  // the drawing is looking. It runs as soon as the ribs drawing is the one in
+  // play rather than waiting for it to be the active view, so the framing is
+  // measured and applied under cover of the zoom instead of snapping into place
+  // once the drawing is already visible.
+  useEffect(() => {
+    if (!isRibsView && detailTarget !== 'ribs') return
+
+    const svg = diagramRef.current?.querySelector('.ribs-layer svg') as SVGSVGElement | null
+    if (!svg) return
+
+    if (!ribsBaseViewBoxRef.current) {
+      const declared = parseViewBox(svg.getAttribute('viewBox'))
+      const content = boundsOf(svg)
+      if (!declared || !content) return
+      ribsBaseViewBoxRef.current = frameBox(content, 0.94, declared.width / declared.height)
+    }
+
+    const base = ribsBaseViewBoxRef.current
+    const rib = isolatedRibId ? svg.querySelector(`#${CSS.escape(isolatedRibId)}`) : null
+
+    // Measured before anything is hidden: getBBox on a display:none element is
+    // empty, and the walk up from the rib hides its own cage on the way.
+    const ribBounds = rib instanceof SVGGraphicsElement ? boundsOf(rib) : null
+    isolateElement(svg, rib)
+
+    // Panning is per-view rather than per-rib, so a transform left over from the
+    // cage would push the rib we just centred straight back off screen.
+    panzoomRef.current?.reset({ animate: false })
+
+    return animateViewBox(svg, ribBounds ? frameBox(ribBounds, 0.9) : base)
+  }, [isRibsView, detailTarget, isolatedRibId])
+
   // The CSS cascades the highlight from a group down onto its shapes, so the
   // class and the colour only ever need to go on the selection itself.
   useEffect(() => {
@@ -544,7 +775,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       })
   }, [selected])
 
-  function zoomToSkull() {
+  // The skull and the rib cage zoom in the same three steps; only the region the
+  // skeleton layer flies towards and the drawing that fades in over it differ.
+  function zoomToDetail(target: DetailTarget) {
     if (transitionPhase !== 'idle') return
 
     // Clear any inline panzoom transform on the SVG before starting the CSS zoom
@@ -553,16 +786,18 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       svg.style.transform = ''
     }
 
-    // Step 1: Smoothly zoom into the skull while keeping the skeleton 100% visible
+    setDetailTarget(target)
+
+    // Step 1: Smoothly zoom into the region while keeping the skeleton 100% visible
     setTransitionPhase('zooming-in')
 
-    // Step 2: At 550ms (as zoom gently settles), begin seamless cross-fade to skull front SVG
+    // Step 2: At 550ms (as zoom gently settles), begin seamless cross-fade to the detail SVG
     setTimeout(() => {
       setTransitionPhase('fading-in')
 
-      // Step 3: Allow 450ms for skull front SVG to dissolve into view over zoomed skull
+      // Step 3: Allow 450ms for the detail SVG to dissolve into view over the zoomed region
       setTimeout(() => {
-        setActiveView('skull-front')
+        setActiveView(target === 'skull' ? 'skull-front' : 'ribs-front')
         setTransitionPhase('idle')
       }, 450)
     }, 550)
@@ -570,6 +805,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   function zoomBackToSkeleton() {
     if (transitionPhase !== 'idle') return
+
+    setIsolatedRibId(null)
 
     // Clear any inline panzoom transform on the skeleton SVG so CSS keyframes zoom out cleanly
     const skeletonSvg = diagramRef.current?.querySelector('.skeleton-layer svg') as HTMLElement | null
@@ -615,11 +852,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   function handleResetView() {
     if (transitionPhase !== 'idle') return
 
-    // If currently in skull view or back view, return to anterior skeleton view
+    // If currently in a detail view or the back view, return to anterior skeleton view
     if (activeView !== 'skeleton') {
       setActiveView('skeleton')
       setTransitionPhase('idle')
     }
+    setIsolatedRibId(null)
 
     // Reset pan and zoom to default scale (1.0) and center position (0, 0)
     if (panzoomRef.current) {
@@ -658,11 +896,26 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
     const rawTarget = event.target as Element
 
-    // Clicking the skull in the anterior skeleton view triggers the smooth zoom into the skull
+    // Clicking the skull or the rib cage in the anterior skeleton view triggers
+    // the smooth zoom into that detail drawing rather than painting it.
     if (activeView === 'skeleton') {
-      const skullGroup = rawTarget.closest('#skull')
-      if (skullGroup) {
-        zoomToSkull()
+      if (rawTarget.closest('#skull')) {
+        zoomToDetail('skull')
+        return
+      }
+      if (rawTarget.closest('#spine_ribs')) {
+        zoomToDetail('ribs')
+        return
+      }
+    }
+
+    // Same idea one level down: in the rib cage a rib opens on its own so its
+    // zones can be reached, and only then does clicking it paint. Everything
+    // else in the view — vertebrae, cartilage — paints straight away.
+    if (isRibsView && !isolatedRibId) {
+      const rib = ribGroupAt(rawTarget)
+      if (rib) {
+        setIsolatedRibId(rib.id)
         return
       }
     }
@@ -881,6 +1134,26 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     }
   }
 
+  // Both detail drawings sit in the stack at all times, so each one has to stay
+  // out of the way unless it is the one being zoomed into or already open.
+  function detailLayerClass(target: DetailTarget): string {
+    return [
+      'diagram-layer',
+      target === 'skull' ? 'skull-layer' : 'ribs-layer',
+      detailTarget !== target ? 'layer-hidden' : '',
+      !isDetailView && transitionPhase === 'idle' ? 'layer-hidden' : '',
+      transitionPhase === 'zooming-in' ? 'layer-hidden' : '',
+      transitionPhase === 'fading-in' ? 'layer-fade-in' : '',
+      transitionPhase === 'fading-out' ? 'layer-fade-out' : '',
+      transitionPhase === 'zooming-out' ? 'layer-hidden' : '',
+      transitionPhase === 'flipping-to-back' || transitionPhase === 'flipping-to-front'
+        ? 'layer-hidden'
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
+
   function toggleSearchSheet() {
     if (searchSwipeTriggered.current) {
       searchSwipeTriggered.current = false
@@ -908,11 +1181,13 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             {caseData?.caseName ?? 'Skeleton'}
           </span>
           <span aria-live="polite" className="truncate text-[11px] font-medium text-slate-500">
-            {selected.length === 1
-              ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
-              : selected.length > 1
-                ? `${selected.length} segments marked`
-                : `Tap a ${selectionMode} to mark ${paintLabel(activePaint).toLowerCase()}`}
+            {isRibsView && !isolatedRibId
+              ? 'Tap a rib to open it on its own'
+              : selected.length === 1
+                ? `${selectionLabel(selected[0].element)} — ${paintLabel(selected[0].paint)}`
+                : selected.length > 1
+                  ? `${selected.length} segments marked`
+                  : `Tap a ${selectionMode} to mark ${paintLabel(activePaint).toLowerCase()}`}
           </span>
         </div>
 
@@ -1022,6 +1297,46 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           </div>
         </div>
 
+        {/* Spine & Ribs View Mode Sub-Bar attached directly to bottom of header */}
+        <div
+          className={[
+            'skull-sub-bar-wrapper ribs-sub-bar-wrapper',
+            isRibsBarVisible ? 'is-visible' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-hidden={!isRibsBarVisible}
+        >
+          <div className="skull-sub-bar-content flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/95 px-3 py-1.5 backdrop-blur-md shadow-xs">
+            <button
+              type="button"
+              onClick={zoomBackToSkeleton}
+              className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 hover:text-sky-800 transition-all cursor-pointer"
+              title="Return to full skeleton view"
+              tabIndex={isRibsBarVisible ? 0 : -1}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Full Skeleton</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsolatedRibId(null)}
+              disabled={!isolatedRibId}
+              className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-100 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Show the whole rib cage again"
+              tabIndex={isRibsBarVisible ? 0 : -1}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+              <span><span className="hidden sm:inline">Whole </span>Rib Cage</span>
+            </button>
+
+            <span className="hidden sm:inline-flex items-center rounded-lg bg-sky-100/80 px-2 py-1 text-[11px] font-semibold text-sky-800">
+              {isolatedRibId ? boneLabel(isolatedRibId) : 'Spine & Ribs — Anterior'}
+            </span>
+          </div>
+        </div>
+
         {/* Skeleton View Mode Sub-Bar attached directly to bottom of header */}
         <div
           className={[
@@ -1035,14 +1350,26 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           <div className="skeleton-sub-bar-content flex items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-3 py-1.5 backdrop-blur-md shadow-xs">
             <button
               type="button"
-              onClick={zoomToSkull}
+              onClick={() => zoomToDetail('skull')}
               disabled={activeView !== 'skeleton'}
               className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
               title="Zoom to detailed skull view"
               tabIndex={isSkeletonBarVisible ? 0 : -1}
             >
               <ScanFace className="h-3.5 w-3.5 text-sky-600" />
-              <span>Skull View</span>
+              <span>Skull<span className="hidden sm:inline"> View</span></span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => zoomToDetail('ribs')}
+              disabled={activeView !== 'skeleton'}
+              className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Zoom to detailed spine and ribs view"
+              tabIndex={isSkeletonBarVisible ? 0 : -1}
+            >
+              <Bone className="h-3.5 w-3.5 text-sky-600" />
+              <span>Spine<span className="hidden sm:inline"> &amp; Ribs</span></span>
             </button>
 
             {/* View Toggle: Front vs Back */}
@@ -1060,7 +1387,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                 tabIndex={isSkeletonBarVisible ? 0 : -1}
               >
                 <ScanFace className="h-3.5 w-3.5" />
-                <span>Front View</span>
+                <span>Front<span className="hidden sm:inline"> View</span></span>
               </button>
               <button
                 type="button"
@@ -1075,7 +1402,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                 tabIndex={isSkeletonBarVisible ? 0 : -1}
               >
                 <FlipHorizontal className="h-3.5 w-3.5" />
-                <span>Back View</span>
+                <span>Back<span className="hidden sm:inline"> View</span></span>
               </button>
             </div>
 
@@ -1092,6 +1419,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         className={[
           'skeleton-diagram',
           isSkullView && transitionPhase === 'idle' ? 'skull-view' : '',
+          isRibsView && transitionPhase === 'idle' ? 'ribs-view' : '',
+          isolatedRibId ? 'rib-isolated' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -1103,7 +1432,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
               ? 'Posterior view of the human skeleton'
               : activeView === 'skull-front'
                 ? 'Anterior view of the human skull'
-                : 'Left lateral view of the human skull'
+                : activeView === 'skull-left'
+                  ? 'Left lateral view of the human skull'
+                  : isolatedRibId
+                    ? `${boneLabel(isolatedRibId)}, shown on its own`
+                    : 'Anterior view of the spine and rib cage'
         }
         onClick={handleDiagramClick}
       >
@@ -1111,6 +1444,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         <div
           className={[
             'diagram-layer skeleton-layer skeleton-front-layer',
+            `zoom-${detailTarget}`,
             transitionPhase === 'zooming-in' ? 'layer-zooming-in' : '',
             transitionPhase === 'fading-in' ? 'layer-zoomed-fade-out' : '',
             transitionPhase === 'fading-out' ? 'layer-zoomed-hold' : '',
@@ -1141,18 +1475,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
         {/* Layer 3: Detailed Skull View (Front or Left) */}
         <div
-          className={[
-            'diagram-layer skull-layer',
-            isSkeletonView && transitionPhase === 'idle' ? 'layer-hidden' : '',
-            transitionPhase === 'zooming-in' ? 'layer-hidden' : '',
-            transitionPhase === 'fading-in' ? 'layer-fade-in' : '',
-            transitionPhase === 'fading-out' ? 'layer-fade-out' : '',
-            transitionPhase === 'zooming-out' ? 'layer-hidden' : '',
-            transitionPhase === 'flipping-to-back' || transitionPhase === 'flipping-to-front' ? 'layer-hidden' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
+          className={detailLayerClass('skull')}
           dangerouslySetInnerHTML={activeView === 'skull-left' ? skullLeftMarkup : skullFrontMarkup}
+        />
+
+        {/* Layer 4: Detailed Spine & Ribs View (Anterior) */}
+        <div
+          className={detailLayerClass('ribs')}
+          dangerouslySetInnerHTML={ribsSpineFrontMarkup}
         />
       </div>
 
