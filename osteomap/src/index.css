@@ -86,8 +86,19 @@ body {
 }
 
 button,
-input {
+input,
+textarea,
+select {
   font: inherit;
+}
+
+/* Prevent mobile browsers (especially iOS Safari) from auto-zooming on input focus */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* Fills the #root column so the task bar has something to be pushed to the

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import skeletonBackSource from '../assets/skeleton_back.svg?raw'
@@ -329,7 +328,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const searchSwipeStart = useRef<{ x: number; y: number } | null>(null)
   const searchSwipeTriggered = useRef(false)
   const isDragging = useRef(false)
-  const panzoomRef = useRef<ReturnType<typeof panzoom> | null>(null)
+  const resetTransformRef = useRef<() => void>(() => {})
   const restoredViewRef = useRef<{
     caseId: string
     activeView: ActiveView
@@ -437,66 +436,27 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [sheetOpen])
 
-  // Track whether the pointer movement is a drag/pan rather than a stationary click,
-  // preventing accidental bone selection when panning the canvas.
-  useEffect(() => {
-    const container = diagramRef.current
-    if (!container) return
-
-    let startX = 0
-    let startY = 0
-
-    const onPointerDown = (e: PointerEvent) => {
-      startX = e.clientX
-      startY = e.clientY
-      isDragging.current = false
-    }
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 5) {
-        isDragging.current = true
-      }
-    }
-
-    const onPointerUp = () => {
-      setTimeout(() => {
-        isDragging.current = false
-      }, 50)
-    }
-
-    container.addEventListener('pointerdown', onPointerDown, { capture: true })
-    window.addEventListener('pointermove', onPointerMove, { capture: true })
-    window.addEventListener('pointerup', onPointerUp, { capture: true })
-
-    return () => {
-      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
-      window.removeEventListener('pointermove', onPointerMove, { capture: true })
-      window.removeEventListener('pointerup', onPointerUp, { capture: true })
-    }
-  }, [])
-
+  // Pan & Zoom Engine: Exact cursor/finger focal point tracking for desktop and mobile
   useEffect(() => {
     if (transitionPhase !== 'idle') return
 
+    const container = diagramRef.current
+    if (!container) return
+
     const activeLayer = getActiveLayerClass(activeView)
-    const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
+    const svg = container.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     if (!svg) return
 
-    const zoom = panzoom(svg, {
-      maxScale: 6,
-      minScale: 0.5,
-      step: 0.25,
-      canvas: true,
-      cursor: 'grab',
-      handleStartEvent: (event) => {
-        event.preventDefault()
-      },
-    })
+    let currentTransform = { x: 0, y: 0, scale: 1 }
+
+    const applyTransform = (x: number, y: number, scale: number) => {
+      currentTransform = { x, y, scale }
+      svg.style.transformOrigin = '0 0'
+      svg.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
+    }
 
     let refocusTimer: ReturnType<typeof setTimeout> | null = null
     const refocus = () => {
-      // Force Chromium/WebKit to invalidate its cached GPU raster texture
-      // and re-rasterize the vector paths sharply at the new zoom scale
       svg.style.display = 'none'
       void svg.getBoundingClientRect()
       svg.style.display = ''
@@ -507,26 +467,279 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       refocusTimer = setTimeout(refocus, 80)
     }
 
+    let momentumId: number | null = null
+    const cancelMomentum = () => {
+      if (momentumId !== null) {
+        cancelAnimationFrame(momentumId)
+        momentumId = null
+      }
+    }
+
+    // Reset handler with smooth animation
+    const reset = () => {
+      cancelMomentum()
+      const startX = currentTransform.x
+      const startY = currentTransform.y
+      const startScale = currentTransform.scale
+      const startTime = performance.now()
+      const duration = 250
+
+      const animateReset = (now: number) => {
+        const elapsed = now - startTime
+        const progress = Math.min(elapsed / duration, 1)
+        const ease = 1 - Math.pow(1 - progress, 3)
+
+        const x = startX + (0 - startX) * ease
+        const y = startY + (0 - startY) * ease
+        const scale = startScale + (1 - startScale) * ease
+
+        applyTransform(x, y, scale)
+
+        if (progress < 1) {
+          requestAnimationFrame(animateReset)
+        } else {
+          refocus()
+        }
+      }
+
+      requestAnimationFrame(animateReset)
+    }
+    resetTransformRef.current = reset
+
+    // Desktop Mouse Wheel Zoom: keeps the point under the mouse cursor perfectly stationary
     const handleWheel = (event: WheelEvent) => {
-      zoom.zoomWithWheel(event)
+      event.preventDefault()
+      cancelMomentum()
+
+      const delta = event.deltaY === 0 && event.deltaX ? event.deltaX : event.deltaY
+      if (delta === 0) return
+
+      const factor = delta < 0 ? 1.15 : 1 / 1.15
+      const newScale = Math.min(6, Math.max(0.5, currentTransform.scale * factor))
+      if (newScale === currentTransform.scale) return
+
+      const rect = svg.getBoundingClientRect()
+      const scaleRatio = newScale / currentTransform.scale
+
+      const newX = currentTransform.x - (scaleRatio - 1) * (event.clientX - rect.left)
+      const newY = currentTransform.y - (scaleRatio - 1) * (event.clientY - rect.top)
+
+      applyTransform(newX, newY, newScale)
       scheduleRefocus()
     }
 
-    svg.addEventListener('panzoomzoom', scheduleRefocus)
-    svg.addEventListener('panzoomend', refocus)
+    container.addEventListener('wheel', handleWheel, { passive: false })
 
-    const container = diagramRef.current
-    container?.addEventListener('wheel', handleWheel, { passive: false })
+    // Single-finger flick momentum
+    const startMomentum = (initialVx: number, initialVy: number) => {
+      cancelMomentum()
+      let vx = initialVx
+      let vy = initialVy
+      let lastTime = performance.now()
 
-    panzoomRef.current = zoom
+      const step = (now: number) => {
+        const dt = Math.min(now - lastTime, 32)
+        lastTime = now
+
+        const newX = currentTransform.x + vx * dt
+        const newY = currentTransform.y + vy * dt
+        applyTransform(newX, newY, currentTransform.scale)
+
+        const friction = Math.pow(0.92, dt / 16)
+        vx *= friction
+        vy *= friction
+
+        if (Math.hypot(vx, vy) > 0.04) {
+          momentumId = requestAnimationFrame(step)
+        } else {
+          momentumId = null
+          scheduleRefocus()
+        }
+      }
+
+      momentumId = requestAnimationFrame(step)
+    }
+
+    // Touch & Pointer Gesture Handling
+    let lastTouchDist = 0
+    let lastTouchMid = { x: 0, y: 0 }
+    let touchStartPos = { x: 0, y: 0 }
+    let lastTouchPos = { x: 0, y: 0 }
+    let recentMoves: { x: number; y: number; time: number }[] = []
+
+    const onTouchStart = (e: TouchEvent) => {
+      cancelMomentum()
+
+      if (e.touches.length === 1) {
+        const t = e.touches[0]
+        touchStartPos = { x: t.clientX, y: t.clientY }
+        lastTouchPos = { x: t.clientX, y: t.clientY }
+        isDragging.current = false
+        recentMoves = [{ x: t.clientX, y: t.clientY, time: performance.now() }]
+      } else if (e.touches.length >= 2) {
+        isDragging.current = true
+        const t0 = e.touches[0]
+        const t1 = e.touches[1]
+        lastTouchDist = Math.max(Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY), 1)
+        lastTouchMid = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 }
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const t = e.touches[0]
+        const distMoved = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y)
+        if (distMoved > 5) {
+          isDragging.current = true
+        }
+
+        if (isDragging.current) {
+          if (e.cancelable) e.preventDefault()
+          const dx = t.clientX - lastTouchPos.x
+          const dy = t.clientY - lastTouchPos.y
+          applyTransform(currentTransform.x + dx, currentTransform.y + dy, currentTransform.scale)
+          lastTouchPos = { x: t.clientX, y: t.clientY }
+
+          const now = performance.now()
+          recentMoves.push({ x: t.clientX, y: t.clientY, time: now })
+          if (recentMoves.length > 5) recentMoves.shift()
+        }
+      } else if (e.touches.length >= 2) {
+        if (e.cancelable) e.preventDefault()
+        isDragging.current = true
+
+        const t0 = e.touches[0]
+        const t1 = e.touches[1]
+        const currentDist = Math.max(Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY), 1)
+        const currentMid = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 }
+
+        const scaleRatio = currentDist / lastTouchDist
+        const newScale = Math.min(6, Math.max(0.5, currentTransform.scale * scaleRatio))
+
+        const rect = svg.getBoundingClientRect()
+        const effectiveRatio = newScale / currentTransform.scale
+
+        // Focal zoom centered on the exact midpoint between the two fingers
+        const x1 = currentTransform.x - (effectiveRatio - 1) * (currentMid.x - rect.left)
+        const y1 = currentTransform.y - (effectiveRatio - 1) * (currentMid.y - rect.top)
+
+        // Midpoint translation tracking
+        const dx = currentMid.x - lastTouchMid.x
+        const dy = currentMid.y - lastTouchMid.y
+
+        applyTransform(x1 + dx, y1 + dy, newScale)
+
+        lastTouchDist = currentDist
+        lastTouchMid = currentMid
+        scheduleRefocus()
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const t = e.touches[0]
+        lastTouchPos = { x: t.clientX, y: t.clientY }
+        touchStartPos = { x: t.clientX, y: t.clientY }
+        recentMoves = [{ x: t.clientX, y: t.clientY, time: performance.now() }]
+      } else if (e.touches.length === 0) {
+        if (isDragging.current && recentMoves.length >= 2) {
+          const last = recentMoves[recentMoves.length - 1]
+          const first = recentMoves[0]
+          const dt = last.time - first.time
+          if (dt > 10 && dt < 200) {
+            const vx = (last.x - first.x) / dt
+            const vy = (last.y - first.y) / dt
+            const speed = Math.hypot(vx, vy)
+            if (speed > 0.25) {
+              startMomentum(vx, vy)
+            }
+          }
+        }
+        setTimeout(() => {
+          isDragging.current = false
+        }, 50)
+      }
+    }
+
+    // Desktop Mouse Dragging
+    let mouseStartPos = { x: 0, y: 0 }
+    let lastMousePos = { x: 0, y: 0 }
+    let isMouseDown = false
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return
+      cancelMomentum()
+      isMouseDown = true
+      mouseStartPos = { x: e.clientX, y: e.clientY }
+      lastMousePos = { x: e.clientX, y: e.clientY }
+      isDragging.current = false
+      recentMoves = [{ x: e.clientX, y: e.clientY, time: performance.now() }]
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' || !isMouseDown) return
+      const distMoved = Math.hypot(e.clientX - mouseStartPos.x, e.clientY - mouseStartPos.y)
+      if (distMoved > 5) {
+        isDragging.current = true
+      }
+
+      if (isDragging.current) {
+        const dx = e.clientX - lastMousePos.x
+        const dy = e.clientY - lastMousePos.y
+        applyTransform(currentTransform.x + dx, currentTransform.y + dy, currentTransform.scale)
+        lastMousePos = { x: e.clientX, y: e.clientY }
+
+        const now = performance.now()
+        recentMoves.push({ x: e.clientX, y: e.clientY, time: now })
+        if (recentMoves.length > 5) recentMoves.shift()
+      }
+    }
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' || !isMouseDown) return
+      isMouseDown = false
+      if (isDragging.current && recentMoves.length >= 2) {
+        const last = recentMoves[recentMoves.length - 1]
+        const first = recentMoves[0]
+        const dt = last.time - first.time
+        if (dt > 10 && dt < 200) {
+          const vx = (last.x - first.x) / dt
+          const vy = (last.y - first.y) / dt
+          if (Math.hypot(vx, vy) > 0.25) {
+            startMomentum(vx, vy)
+          }
+        }
+      }
+      setTimeout(() => {
+        isDragging.current = false
+      }, 50)
+    }
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false })
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd, { passive: false })
+    window.addEventListener('touchcancel', onTouchEnd, { passive: false })
+
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
+    window.addEventListener('pointermove', onPointerMove, { capture: true })
+    window.addEventListener('pointerup', onPointerUp, { capture: true })
+    window.addEventListener('pointercancel', onPointerUp, { capture: true })
 
     return () => {
+      cancelMomentum()
       if (refocusTimer) clearTimeout(refocusTimer)
-      svg.removeEventListener('panzoomzoom', scheduleRefocus)
-      svg.removeEventListener('panzoomend', refocus)
-      panzoomRef.current = null
-      container?.removeEventListener('wheel', handleWheel)
-      zoom.destroy()
+      resetTransformRef.current = () => {}
+      container.removeEventListener('wheel', handleWheel)
+
+      container.removeEventListener('touchstart', onTouchStart)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+      window.removeEventListener('touchcancel', onTouchEnd)
+
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
+      window.removeEventListener('pointermove', onPointerMove, { capture: true })
+      window.removeEventListener('pointerup', onPointerUp, { capture: true })
+      window.removeEventListener('pointercancel', onPointerUp, { capture: true })
     }
   }, [activeView, transitionPhase])
 
@@ -622,8 +835,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     }
 
     // Reset pan and zoom to default scale (1.0) and center position (0, 0)
-    if (panzoomRef.current) {
-      panzoomRef.current.reset({ animate: true })
+    if (resetTransformRef.current) {
+      resetTransformRef.current()
     }
 
     // Ensure all SVG layer transforms are clean and centered
@@ -636,11 +849,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }
 
   async function handleSaveNotes(notes: string) {
-  if (!caseData) return
-  await updateCaseMetadata(caseId, { fieldNotes: notes })
-  setCaseData({ ...caseData, fieldNotes: notes, dateModified: new Date().toISOString() })
-  setNotesOpen(false)
-}
+    if (!caseData) return
+    await updateCaseMetadata(caseId, { fieldNotes: notes })
+    setCaseData({ ...caseData, fieldNotes: notes, dateModified: new Date().toISOString() })
+    setNotesOpen(false)
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }
 
 
   // Marks build up: each click paints another segment in the active colour, and
@@ -1318,7 +1532,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         caseName={caseData?.caseName}
         initialValue={caseData?.fieldNotes ?? ''}
         onSave={handleSaveNotes}
-        onCancel={() => setNotesOpen(false)}
+        onCancel={() => {
+          setNotesOpen(false)
+          window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+        }}
       />
     </div>
   )
