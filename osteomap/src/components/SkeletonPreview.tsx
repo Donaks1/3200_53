@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
 import type { SegmentState } from '../db/types'
+import { prepareSkeletonFront, summariseZones, zoneStandIns } from '../pages/skeletonArtwork'
 
-// Strip XML declaration and replace cls- to avoid style bleeding
-const skeletonMarkup = skeletonFrontSource
-  .replace(/<\?xml[^?]*\?>/, '')
-  .replaceAll('cls-', 'preview-cls-')
+// Strip XML declaration and replace cls- to avoid style bleeding, then ready it
+// so marks made in the skull, scapula and pelvis drawings land on it too.
+const skeletonMarkup = prepareSkeletonFront(
+  skeletonFrontSource.replace(/<\?xml[^?]*\?>/, '').replaceAll('cls-', 'preview-cls-'),
+)
 
 interface SkeletonPreviewProps {
   segmentStates?: Record<string, SegmentState>
@@ -35,6 +37,14 @@ export function SkeletonPreview({ segmentStates = {}, className = '' }: Skeleton
         }
       } catch (e) {
         console.warn(`Could not select segment ID "${segmentId}":`, e)
+      }
+    }
+
+    // Bones drawn here only whole show what their zones add up to, as on the
+    // skeleton page, unless they are marked in their own right.
+    for (const [boneId, summary] of summariseZones(segmentStates)) {
+      for (const target of zoneStandIns(svg, boneId)) {
+        if (!target.closest('[data-preview-state]')) target.setAttribute('data-preview-state', summary)
       }
     }
   }, [segmentStates])

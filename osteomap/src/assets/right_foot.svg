@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="right_x5F_foot" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 345 905">
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" id="right_foot" version="1.1" viewBox="0 0 345 905">
   <!-- Generator: Adobe Illustrator 30.8.2, SVG Export Plug-In . SVG Version: 2.1.4 Build 7)  -->
   <defs>
     <style>
@@ -11,51 +11,51 @@
       }
     </style>
   </defs>
-  <g id="r_x5F_hallux_x5F_distal_x5F_phalanx" data-bone="Hallux distal phalanx">
-    <path id="r_x5F_hallux_x5F_distal_x5F_phalanx_x5F_2" class="st0" d="M51.85,35c-.16-1.62-.44-3.28-.85-5-5.33-4.67-3.33-10,6-16,7.33-6,16.33-6.67,27-2,9.15,4.88,12.16,12.54,9.04,23h-41.19Z" data-bone="Hallux distal phalanx" data-zone="2"/>
-    <path id="r_x5F_hallux_x5F_distal_x5F_phalanx_x5F_3" class="st0" d="M26.68,72c1.96-4.12,5.07-7.45,9.32-10,11.7-6.43,16.98-15.43,15.85-27h41.19c-.29.98-.64,1.98-1.04,3-7.18,12.7-8.18,24.04-3,34H26.68Z" data-bone="Hallux distal phalanx" data-zone="3"/>
-    <path id="r_x5F_hallux_x5F_distal_x5F_phalanx_x5F_1" class="st0" d="M25,93c-1.53-8.43-.97-15.43,1.68-21h62.32c1.07,2.06,2.41,4.06,4,6,6,8,5.67,14.67-1,20l-67-5Z" data-bone="Hallux distal phalanx" data-zone="1"/>
+  <g id="r_hallux_distal_phalanx" data-bone="Hallux distal phalanx">
+    <path id="r_hallux_distal_phalanx_2" class="st0" d="M51.85,35c-.16-1.62-.44-3.28-.85-5-5.33-4.67-3.33-10,6-16,7.33-6,16.33-6.67,27-2,9.15,4.88,12.16,12.54,9.04,23h-41.19Z" data-bone="Hallux distal phalanx" data-zone="2"/>
+    <path id="r_hallux_distal_phalanx_3" class="st0" d="M26.68,72c1.96-4.12,5.07-7.45,9.32-10,11.7-6.43,16.98-15.43,15.85-27h41.19c-.29.98-.64,1.98-1.04,3-7.18,12.7-8.18,24.04-3,34H26.68Z" data-bone="Hallux distal phalanx" data-zone="3"/>
+    <path id="r_hallux_distal_phalanx_1" class="st0" d="M25,93c-1.53-8.43-.97-15.43,1.68-21h62.32c1.07,2.06,2.41,4.06,4,6,6,8,5.67,14.67-1,20l-67-5Z" data-bone="Hallux distal phalanx" data-zone="1"/>
   </g>
-  <g id="r_x5F_hallux_x5F_proximal_x5F_phalanx" data-bone="Hallux proximal phalanx">
-    <path id="r_x5F_hallux_x5F_proximal_x5F_phalanx_x5F_2" class="st0" d="M28,104c8-4.67,24.67-5,50-1,10.67.67,14,7.67,10,21-.56,1.34-1.1,2.67-1.62,4H28v-24Z" data-bone="Hallux proximal phalanx" data-zone="2"/>
-    <path id="r_x5F_hallux_x5F_proximal_x5F_phalanx_x5F_3" class="st0" d="M86.38,128c-7.42,19.13-9.88,36.79-7.38,53,.47,7.5,2.25,14.49,5.35,21H18.81c9.27-16.32,12.32-37.65,9.19-64v-10s58.38,0,58.38,0Z" data-bone="Hallux proximal phalanx" data-zone="3"/>
-    <path id="r_x5F_hallux_x5F_proximal_x5F_phalanx_x5F_1" class="st0" d="M84.35,202c1.31,2.75,2.86,5.42,4.65,8l1,14c-18,4.67-41,5-69,1-6.67-4-8-10.67-4-20,.63-.98,1.23-1.98,1.81-3h65.54Z" data-bone="Hallux proximal phalanx" data-zone="1"/>
+  <g id="r_hallux_proximal_phalanx" data-bone="Hallux proximal phalanx">
+    <path id="r_hallux_proximal_phalanx_2" class="st0" d="M28,104c8-4.67,24.67-5,50-1,10.67.67,14,7.67,10,21-.56,1.34-1.1,2.67-1.62,4H28v-24Z" data-bone="Hallux proximal phalanx" data-zone="2"/>
+    <path id="r_hallux_proximal_phalanx_3" class="st0" d="M86.38,128c-7.42,19.13-9.88,36.79-7.38,53,.47,7.5,2.25,14.49,5.35,21H18.81c9.27-16.32,12.32-37.65,9.19-64v-10s58.38,0,58.38,0Z" data-bone="Hallux proximal phalanx" data-zone="3"/>
+    <path id="r_hallux_proximal_phalanx_1" class="st0" d="M84.35,202c1.31,2.75,2.86,5.42,4.65,8l1,14c-18,4.67-41,5-69,1-6.67-4-8-10.67-4-20,.63-.98,1.23-1.98,1.81-3h65.54Z" data-bone="Hallux proximal phalanx" data-zone="1"/>
   </g>
-  <path id="r_x5F_toe_x5F_2_x5F_distal_x5F_phalanx" class="st0" d="M131,63c5.33-7.33,7-13.67,5-19-2.67-6,0-10,8-12,10.67-1.33,17.67,2,21,10-1.33,6-3.67,11.33-7,16l5,6c-10,4-20.67,3.67-32-1Z" data-bone="Toe 2 distal phalanx"/>
-  <path id="r_x5F_toe_x5F_2_x5F_middle_x5F_phalanx" class="st0" d="M129,71c11.33,3.33,22.33,3.33,33,0-5.33,11.33-6.33,22.33-3,33l4,11c-11.33,5.33-23.33,5.33-36,0,3.33-10,3-20.67-1-32l3-12Z" data-bone="Toe 2 middle phalanx"/>
-  <path id="r_x5F_toe_x5F_2_x5F_proximal_x5F_phalanx" class="st0" d="M127,125c12,6.67,24.33,6.67,37,0-4,16.67-4.33,32.33-1,47,2.67,15.33,6.67,29,12,41l-1,13c-8.67-.67-16.33-4-23-10-10.67-3.33-20-1-28,7-5.33-3.33-6-9.67-2-19,10-22.67,12.67-42,8-58l-2-21Z" data-bone="Toe 2 proximal phalanx"/>
-  <path id="r_x5F_toe_x5F_3_x5F_distal_x5F_phalanx" class="st0" d="M187,97c6-8,8-16,6-24-2-7.33,1.33-11,10-11,9.33,1.33,13.67,5.67,13,13-4.67,6-3.67,12,3,18l4,8c-11.33,5.33-23.33,5.67-36,1v-5Z" data-bone="Toe 3 distal phalanx"/>
-  <path id="r_x5F_toe_x5F_3_x5F_middle_x5F_phalanx" class="st0" d="M188,110c9.33,3.33,20,3.33,32,0l-2,13,3,16c-11.33,5.33-22.67,5.33-34,0,4-11.33,4.33-21,1-29Z" data-bone="Toe 3 middle phalanx"/>
-  <path id="r_x5F_toe_x5F_3_x5F_proximal_x5F_phalanx" class="st0" d="M188,149c10.67,6,22,6,34,0-4.67,14.67-5.67,29.67-3,45l6,36c-12.67,4.67-26.33,5.33-41,2-2.67-10-2-20.67,2-32,4-14.67,3.67-26.67-1-36l3-15Z" data-bone="Toe 3 proximal phalanx"/>
-  <path id="r_x5F_toe_x5F_4_x5F_distal_x5F_phalanx" class="st0" d="M241,139c4.67-7.33,7-13.67,7-19,4.67-6,10-6,16,0,4.67,4.67,5.67,10.67,3,18l6,6c-10.67,4-21.33,3.67-32-1v-4Z" data-bone="Toe 4 distal phalanx"/>
-  <path id="r_x5F_toe_x5F_4_x5F_middle_x5F_phalanx" class="st0" d="M242,154c9.33,1.33,18.67.67,28-2l-2,18,3,15c-9.33,5.33-19.67,5.67-31,1l2-32Z" data-bone="Toe 4 middle phalanx"/>
-  <path id="r_x5F_toe_x5F_4_x5F_proximal_x5F_phalanx" class="st0" d="M242,196c8.67,4.67,17.33,4.67,26,0-6,17.33-6.33,33.67-1,49l8,17c-12,5.33-24.67,6-38,2-3.33-6-3-13.33,1-22,5.33-16,6.67-31.33,4-46Z" data-bone="Toe 4 proximal phalanx"/>
-  <path id="r_x5F_toe_x5F_5_x5F_distal_x5F_phalanx" class="st0" d="M284,198c7.33-4.67,9-10,5-16,.67-5.33,3.67-7.33,9-6,6.67.67,8.67,5.33,6,14l9,9c-8,4.67-17.67,5.67-29,3v-4Z" data-bone="Toe 5 distal phalanx"/>
-  <path id="r_x5F_toe_x5F_5_x5F_middle_x5F_phalanx" class="st0" d="M287,211c8.67,2.67,17.33,2,26-2l-1,19c-8,4-16,4.33-24,1l-1-18Z" data-bone="Toe 5 middle phalanx"/>
-  <path id="r_x5F_toe_x5F_5_x5F_proximal_x5F_phalanx" class="st0" d="M289,239c8,4,17,3.33,27-2-5.33,16.67-5.33,31.33,0,44,8.67,10,11.67,19,9,27-14.67,3.33-28,2.33-40-3-2.67-5.33-2-13.67,2-25,5.33-13.33,6-27,2-41Z" data-bone="Toe 5 proximal phalanx"/>
-  <g id="r_x5F_metatarsal_x5F_1" data-bone="Metatarsal 1">
-    <path id="r_x5F_metatarsal_x5F_1_x5F_2" class="st0" d="M20,237c18.67,8.67,41.67,8.33,69-1,12.61,19.48,16.59,37.48,11.97,54H27.25c-11.66-17.95-14.08-35.62-7.25-53Z" data-bone="Metatarsal 1" data-zone="2"/>
-    <path id="r_x5F_metatarsal_x5F_1_x5F_3" class="st0" d="M100.97,290c-.76,2.71-1.75,5.37-2.97,8-7.33,24-6,45.67,4,65,0,0,15.61,31.94,20.53,42H47.67c.67-5.11,1.78-10.78,3.33-17-2-24.67-9-56-21-94-.97-1.33-1.88-2.67-2.75-4h73.72Z" data-bone="Metatarsal 1" data-zone="3"/>
-    <path id="r_x5F_metatarsal_x5F_1_x5F_1" class="st0" d="M122.53,405c.92,1.88,1.47,3,1.47,3l1,18c-16.67-10.67-32.67-11-48-1-15.33,12-24.67,13.33-28,4-2.22-5.78-2.67-13.78-1.33-24h74.87-.01Z" data-bone="Metatarsal 1" data-zone="1"/>
+  <g id="r_toe_2_distal_phalanx" data-bone="Toe 2 distal phalanx"><path id="r_toe_2_distal_phalanx_1" class="st0" d="M131,63c5.33-7.33,7-13.67,5-19-2.67-6,0-10,8-12,10.67-1.33,17.67,2,21,10-1.33,6-3.67,11.33-7,16l5,6c-10,4-20.67,3.67-32-1Z" data-bone="Toe 2 distal phalanx"/></g>
+  <g id="r_toe_2_middle_phalanx" data-bone="Toe 2 middle phalanx"><path id="r_toe_2_middle_phalanx_1" class="st0" d="M129,71c11.33,3.33,22.33,3.33,33,0-5.33,11.33-6.33,22.33-3,33l4,11c-11.33,5.33-23.33,5.33-36,0,3.33-10,3-20.67-1-32l3-12Z" data-bone="Toe 2 middle phalanx"/></g>
+  <g id="r_toe_2_proximal_phalanx" data-bone="Toe 2 proximal phalanx"><path id="r_toe_2_proximal_phalanx_1" class="st0" d="M127,125c12,6.67,24.33,6.67,37,0-4,16.67-4.33,32.33-1,47,2.67,15.33,6.67,29,12,41l-1,13c-8.67-.67-16.33-4-23-10-10.67-3.33-20-1-28,7-5.33-3.33-6-9.67-2-19,10-22.67,12.67-42,8-58l-2-21Z" data-bone="Toe 2 proximal phalanx"/></g>
+  <g id="r_toe_3_distal_phalanx" data-bone="Toe 3 distal phalanx"><path id="r_toe_3_distal_phalanx_1" class="st0" d="M187,97c6-8,8-16,6-24-2-7.33,1.33-11,10-11,9.33,1.33,13.67,5.67,13,13-4.67,6-3.67,12,3,18l4,8c-11.33,5.33-23.33,5.67-36,1v-5Z" data-bone="Toe 3 distal phalanx"/></g>
+  <g id="r_toe_3_middle_phalanx" data-bone="Toe 3 middle phalanx"><path id="r_toe_3_middle_phalanx_1" class="st0" d="M188,110c9.33,3.33,20,3.33,32,0l-2,13,3,16c-11.33,5.33-22.67,5.33-34,0,4-11.33,4.33-21,1-29Z" data-bone="Toe 3 middle phalanx"/></g>
+  <g id="r_toe_3_proximal_phalanx" data-bone="Toe 3 proximal phalanx"><path id="r_toe_3_proximal_phalanx_1" class="st0" d="M188,149c10.67,6,22,6,34,0-4.67,14.67-5.67,29.67-3,45l6,36c-12.67,4.67-26.33,5.33-41,2-2.67-10-2-20.67,2-32,4-14.67,3.67-26.67-1-36l3-15Z" data-bone="Toe 3 proximal phalanx"/></g>
+  <g id="r_toe_4_distal_phalanx" data-bone="Toe 4 distal phalanx"><path id="r_toe_4_distal_phalanx_1" class="st0" d="M241,139c4.67-7.33,7-13.67,7-19,4.67-6,10-6,16,0,4.67,4.67,5.67,10.67,3,18l6,6c-10.67,4-21.33,3.67-32-1v-4Z" data-bone="Toe 4 distal phalanx"/></g>
+  <g id="r_toe_4_middle_phalanx" data-bone="Toe 4 middle phalanx"><path id="r_toe_4_middle_phalanx_1" class="st0" d="M242,154c9.33,1.33,18.67.67,28-2l-2,18,3,15c-9.33,5.33-19.67,5.67-31,1l2-32Z" data-bone="Toe 4 middle phalanx"/></g>
+  <g id="r_toe_4_proximal_phalanx" data-bone="Toe 4 proximal phalanx"><path id="r_toe_4_proximal_phalanx_1" class="st0" d="M242,196c8.67,4.67,17.33,4.67,26,0-6,17.33-6.33,33.67-1,49l8,17c-12,5.33-24.67,6-38,2-3.33-6-3-13.33,1-22,5.33-16,6.67-31.33,4-46Z" data-bone="Toe 4 proximal phalanx"/></g>
+  <g id="r_toe_5_distal_phalanx" data-bone="Toe 5 distal phalanx"><path id="r_toe_5_distal_phalanx_1" class="st0" d="M284,198c7.33-4.67,9-10,5-16,.67-5.33,3.67-7.33,9-6,6.67.67,8.67,5.33,6,14l9,9c-8,4.67-17.67,5.67-29,3v-4Z" data-bone="Toe 5 distal phalanx"/></g>
+  <g id="r_toe_5_middle_phalanx" data-bone="Toe 5 middle phalanx"><path id="r_toe_5_middle_phalanx_1" class="st0" d="M287,211c8.67,2.67,17.33,2,26-2l-1,19c-8,4-16,4.33-24,1l-1-18Z" data-bone="Toe 5 middle phalanx"/></g>
+  <g id="r_toe_5_proximal_phalanx" data-bone="Toe 5 proximal phalanx"><path id="r_toe_5_proximal_phalanx_1" class="st0" d="M289,239c8,4,17,3.33,27-2-5.33,16.67-5.33,31.33,0,44,8.67,10,11.67,19,9,27-14.67,3.33-28,2.33-40-3-2.67-5.33-2-13.67,2-25,5.33-13.33,6-27,2-41Z" data-bone="Toe 5 proximal phalanx"/></g>
+  <g id="r_metatarsal_1" data-bone="Metatarsal 1">
+    <path id="r_metatarsal_1_2" class="st0" d="M20,237c18.67,8.67,41.67,8.33,69-1,12.61,19.48,16.59,37.48,11.97,54H27.25c-11.66-17.95-14.08-35.62-7.25-53Z" data-bone="Metatarsal 1" data-zone="2"/>
+    <path id="r_metatarsal_1_3" class="st0" d="M100.97,290c-.76,2.71-1.75,5.37-2.97,8-7.33,24-6,45.67,4,65,0,0,15.61,31.94,20.53,42H47.67c.67-5.11,1.78-10.78,3.33-17-2-24.67-9-56-21-94-.97-1.33-1.88-2.67-2.75-4h73.72Z" data-bone="Metatarsal 1" data-zone="3"/>
+    <path id="r_metatarsal_1_1" class="st0" d="M122.53,405c.92,1.88,1.47,3,1.47,3l1,18c-16.67-10.67-32.67-11-48-1-15.33,12-24.67,13.33-28,4-2.22-5.78-2.67-13.78-1.33-24h74.87-.01Z" data-bone="Metatarsal 1" data-zone="1"/>
   </g>
-  <path id="r_x5F_metatarsal_x5F_2" class="st0" d="M129,233c4-8,10.33-11,19-9,10,2.67,18.67,7,26,13,3.33,8,2,17-4,27-3.33,16.67-3,45,1,85,2.67,30,7.33,53,14,69,4,11.33,3.67,24-1,38-16,4.67-33.33,1.67-52-9-4.67-5.33-5-15.67-1-31l3-141c-10.67-10.67-12.33-24.67-5-42Z" data-bone="Metatarsal 2"/>
-  <path id="r_x5F_metatarsal_x5F_3" class="st0" d="M185,245c13.33,6.67,26.33,6.33,39-1,5.33,10.67,5,22.33-1,35-5.33,17.33-5.67,42.33-1,75,2,29.33,7.33,56.33,16,81,9.33,9.33,10.67,22.67,4,40l-9,12c-12.67-14-28.33-22.33-47-25,.67-13.33,3-25.33,7-36,5.33-18.67,4-54-4-106,0-20-1.67-35.33-5-46s-3-20.33,1-29Z" data-bone="Metatarsal 3"/>
-  <path id="r_x5F_metatarsal_x5F_4" class="st0" d="M237,277c12,9.33,24.67,9,38-1,4.67,12,3.67,25-3,39-5.33,26-7.33,55.67-6,89,0,28,4.33,50.67,13,68,4.67,15.33,1.33,30.67-10,46l-9,9c-14-9.33-21.67-20.67-23-34,2.67-14,3.33-29.33,2-46,5.33-30.67,5-70-1-118-5.33-22-5.67-39.33-1-52Z" data-bone="Metatarsal 4"/>
-  <path id="r_x5F_metatarsal_x5F_5" class="st0" d="M285,320c12-8,24.67-8.33,38-1,5.33,10,4.33,22-3,36-7.33,22-14.33,55.33-21,100-3.33,26.67-2.67,48.67,2,66s1,32-11,44c-10,6.67-21,5.67-33-3l3-18c19.33,1.33,27.67-8.67,25-30-3.33-16.67-3.67-36.33-1-59l7-97c-8.67-14-10.67-26.67-6-38Z" data-bone="Metatarsal 5"/>
-  <path id="r_x5F_CU1" class="st0" d="M62,443c13.33-14,32.33-19,57-15,4.67,14,3.67,31-3,51-5.33,15.33-24.33,27.33-57,36-10.67-8-14-17.67-10-29l13-43Z" data-bone="Medial cuneiform"/>
-  <path id="r_x5F_CU2" class="st0" d="M127,456c17.33,7.33,33.67,10.67,49,10,4,13.33,1.67,31-7,53-17.33,6-37,3.33-59-8,8-12.67,13.67-31,17-55Z" data-bone="Intermediate cuneiform"/>
-  <path id="r_x5F_CU3" class="st0" d="M186,469c20,4,35.33,15.67,46,35-1.33,18-13,34-35,48l-23,4c3.33-14.67,3.67-24.33,1-29,8-17.33,11.67-36.67,11-58Z" data-bone="Lateral cuneiform"/>
-  <path id="r_x5F_NAV" class="st0" d="M60,525c16-9.33,32.67-11.33,50-6,21.33,9.33,41.67,13.67,61,13,14,13.33,13.33,32.67-2,58-15.33-6.67-34-12.67-56-18-24,.67-45.33,7-64,19-10,0-13.67-6.67-11-20,3.33-17.33,10.67-32.67,22-46Z" data-bone="Navicular"/>
-  <path id="r_x5F_CUB" class="st0" d="M237,510c10,9.33,16,20,18,32,2,18.67-4,35.33-18,50-23.33,6-44,6-62,0l6-28c24-5.33,42.67-23.33,56-54Z" data-bone="Cuboid"/>
-  <g id="r_x5F_talus">
-    <path id="r_x5F_talus_x5F_3" class="st0" d="M58,602c11.33-12,26.33-19,45-21l10,35c-21.33,0-39.33,4.67-54,14-4.67-9.33-5-18.67-1-28Z" data-bone="Talus" data-zone="3"/>
-    <path id="r_x5F_talus_x5F_4" class="st0" d="M110,581c19.33,1.33,36.67,6.33,52,15l6,20c-16,8.67-32,9.33-48,2l-10-37Z" data-bone="Talus" data-zone="4"/>
-    <path id="r_x5F_talus_x5F_1" class="st0" d="M69,630c14.67-9.33,32-9.33,52,0l15,142c-24,0-42.67-7-56-21-11.33-16-18.67-39.33-22-70-4-21.33-.33-38.33,11-51Z" data-bone="Talus" data-zone="1"/>
-    <path id="r_x5F_talus_x5F_2" class="st0" d="M128,630c18,.67,31-1.67,39-7,15.33,3.33,25.67,16,31,38,3.33,14.67,1.33,32.33-6,53l-17,65-32-5-15-144Z" data-bone="Talus" data-zone="2"/>
+  <g id="r_metatarsal_2" data-bone="Metatarsal 2"><path id="r_metatarsal_2_1" class="st0" d="M129,233c4-8,10.33-11,19-9,10,2.67,18.67,7,26,13,3.33,8,2,17-4,27-3.33,16.67-3,45,1,85,2.67,30,7.33,53,14,69,4,11.33,3.67,24-1,38-16,4.67-33.33,1.67-52-9-4.67-5.33-5-15.67-1-31l3-141c-10.67-10.67-12.33-24.67-5-42Z" data-bone="Metatarsal 2"/></g>
+  <g id="r_metatarsal_3" data-bone="Metatarsal 3"><path id="r_metatarsal_3_1" class="st0" d="M185,245c13.33,6.67,26.33,6.33,39-1,5.33,10.67,5,22.33-1,35-5.33,17.33-5.67,42.33-1,75,2,29.33,7.33,56.33,16,81,9.33,9.33,10.67,22.67,4,40l-9,12c-12.67-14-28.33-22.33-47-25,.67-13.33,3-25.33,7-36,5.33-18.67,4-54-4-106,0-20-1.67-35.33-5-46s-3-20.33,1-29Z" data-bone="Metatarsal 3"/></g>
+  <g id="r_metatarsal_4" data-bone="Metatarsal 4"><path id="r_metatarsal_4_1" class="st0" d="M237,277c12,9.33,24.67,9,38-1,4.67,12,3.67,25-3,39-5.33,26-7.33,55.67-6,89,0,28,4.33,50.67,13,68,4.67,15.33,1.33,30.67-10,46l-9,9c-14-9.33-21.67-20.67-23-34,2.67-14,3.33-29.33,2-46,5.33-30.67,5-70-1-118-5.33-22-5.67-39.33-1-52Z" data-bone="Metatarsal 4"/></g>
+  <g id="r_metatarsal_5" data-bone="Metatarsal 5"><path id="r_metatarsal_5_1" class="st0" d="M285,320c12-8,24.67-8.33,38-1,5.33,10,4.33,22-3,36-7.33,22-14.33,55.33-21,100-3.33,26.67-2.67,48.67,2,66s1,32-11,44c-10,6.67-21,5.67-33-3l3-18c19.33,1.33,27.67-8.67,25-30-3.33-16.67-3.67-36.33-1-59l7-97c-8.67-14-10.67-26.67-6-38Z" data-bone="Metatarsal 5"/></g>
+  <g id="r_medial_cuneiform" data-bone="Medial cuneiform"><path id="r_medial_cuneiform_1" class="st0" d="M62,443c13.33-14,32.33-19,57-15,4.67,14,3.67,31-3,51-5.33,15.33-24.33,27.33-57,36-10.67-8-14-17.67-10-29l13-43Z" data-bone="Medial cuneiform"/></g>
+  <g id="r_intermediate_cuneiform" data-bone="Intermediate cuneiform"><path id="r_intermediate_cuneiform_1" class="st0" d="M127,456c17.33,7.33,33.67,10.67,49,10,4,13.33,1.67,31-7,53-17.33,6-37,3.33-59-8,8-12.67,13.67-31,17-55Z" data-bone="Intermediate cuneiform"/></g>
+  <g id="r_lateral_cuneiform" data-bone="Lateral cuneiform"><path id="r_lateral_cuneiform_1" class="st0" d="M186,469c20,4,35.33,15.67,46,35-1.33,18-13,34-35,48l-23,4c3.33-14.67,3.67-24.33,1-29,8-17.33,11.67-36.67,11-58Z" data-bone="Lateral cuneiform"/></g>
+  <g id="r_navicular" data-bone="Navicular"><path id="r_navicular_1" class="st0" d="M60,525c16-9.33,32.67-11.33,50-6,21.33,9.33,41.67,13.67,61,13,14,13.33,13.33,32.67-2,58-15.33-6.67-34-12.67-56-18-24,.67-45.33,7-64,19-10,0-13.67-6.67-11-20,3.33-17.33,10.67-32.67,22-46Z" data-bone="Navicular"/></g>
+  <g id="r_cuboid" data-bone="Cuboid"><path id="r_cuboid_1" class="st0" d="M237,510c10,9.33,16,20,18,32,2,18.67-4,35.33-18,50-23.33,6-44,6-62,0l6-28c24-5.33,42.67-23.33,56-54Z" data-bone="Cuboid"/></g>
+  <g id="r_talus">
+    <path id="r_talus_3" class="st0" d="M58,602c11.33-12,26.33-19,45-21l10,35c-21.33,0-39.33,4.67-54,14-4.67-9.33-5-18.67-1-28Z" data-bone="Talus" data-zone="3"/>
+    <path id="r_talus_4" class="st0" d="M110,581c19.33,1.33,36.67,6.33,52,15l6,20c-16,8.67-32,9.33-48,2l-10-37Z" data-bone="Talus" data-zone="4"/>
+    <path id="r_talus_1" class="st0" d="M69,630c14.67-9.33,32-9.33,52,0l15,142c-24,0-42.67-7-56-21-11.33-16-18.67-39.33-22-70-4-21.33-.33-38.33,11-51Z" data-bone="Talus" data-zone="1"/>
+    <path id="r_talus_2" class="st0" d="M128,630c18,.67,31-1.67,39-7,15.33,3.33,25.67,16,31,38,3.33,14.67,1.33,32.33-6,53l-17,65-32-5-15-144Z" data-bone="Talus" data-zone="2"/>
   </g>
-  <g id="r_x5F_calcaneus">
-    <path id="r_x5F_calcaneus_x5F_5" class="st0" d="M175,604c24.67,3.33,47,1.67,67-5,5.33,16.67,5,38-1,64l-3,33c8,10,8.33,21,1,33,4,18.67,4,38.33,0,59l-12,65-6-1-4-111-35,30,16-55c8.67-25.33,9.67-46,3-62-4-20-12.67-32-26-36v-14Z" data-bone="Calcaneus" data-zone="5"/>
-    <path id="r_x5F_calcaneus_x5F_2" class="st0" d="M120,778c14.67,6,32.67,8.33,54,7l39-37,3,104c-36.67,17.33-76,18-118,2-2-11.33.33-24,7-38l15-38Z" data-bone="Calcaneus" data-zone="2"/>
-    <path id="r_x5F_calcaneus_x5F_1" class="st0" d="M98,862c40.67,15.33,83.33,15.33,128,0,2,10-1.33,17-10,21-40,15.33-76,14.67-108-2l-10-19Z" data-bone="Calcaneus" data-zone="1"/>
+  <g id="r_calcaneus">
+    <path id="r_calcaneus_5" class="st0" d="M175,604c24.67,3.33,47,1.67,67-5,5.33,16.67,5,38-1,64l-3,33c8,10,8.33,21,1,33,4,18.67,4,38.33,0,59l-12,65-6-1-4-111-35,30,16-55c8.67-25.33,9.67-46,3-62-4-20-12.67-32-26-36v-14Z" data-bone="Calcaneus" data-zone="5"/>
+    <path id="r_calcaneus_2" class="st0" d="M120,778c14.67,6,32.67,8.33,54,7l39-37,3,104c-36.67,17.33-76,18-118,2-2-11.33.33-24,7-38l15-38Z" data-bone="Calcaneus" data-zone="2"/>
+    <path id="r_calcaneus_1" class="st0" d="M98,862c40.67,15.33,83.33,15.33,128,0,2,10-1.33,17-10,21-40,15.33-76,14.67-108-2l-10-19Z" data-bone="Calcaneus" data-zone="1"/>
   </g>
 </svg>
