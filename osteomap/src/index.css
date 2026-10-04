@@ -17,6 +17,8 @@
   --paint-absent-edge: #b91c1c;
   --paint-fragmentary: #60a5fa;
   --paint-fragmentary-edge: #1d4ed8;
+  --paint-partial: #fbbf24;
+  --paint-partial-edge: #b45309;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -57,6 +59,8 @@
     --paint-absent-edge: #fca5a5;
     --paint-fragmentary: #3b82f6;
     --paint-fragmentary-edge: #93c5fd;
+    --paint-partial: #f59e0b;
+    --paint-partial-edge: #fcd34d;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -206,12 +210,41 @@ input {
     align-items: center;
     position: absolute;
     inset: 0;
-    padding: 48px 8px calc(72px + env(safe-area-inset-bottom));
+    padding: 48px 8px calc(92px + env(safe-area-inset-bottom));
     width: 100%;
     height: 100%;
     pointer-events: auto;
     contain: layout;
     touch-action: none;
+  }
+
+  /* Detail drawings also sit below their sub-bar and title, so none of a
+     drawing starts out hidden behind them. */
+  .detail-layer {
+    padding-top: 104px;
+  }
+
+  /* Names whatever is zoomed into, just under the sub-bar. It drops in with the
+     detail drawing and fades back out as the view zooms away. */
+  .detail-title {
+    position: absolute;
+    top: 64px;
+    left: 50%;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate3d(-50%, -6px, 0);
+    transition:
+      opacity 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .detail-title.is-visible {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+    transition:
+      opacity 450ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 450ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .layer-hidden {
@@ -270,64 +303,66 @@ input {
     stroke: var(--paint-edge);
   }
 
-  /* Skull outlines in skeleton layer:
-     Compensate for <g id="skull"> scale(0.247) so that the rendered stroke
-     width equals 0.34px, exactly matching the rest of the skeleton (.front-cls-3). */
-  .skeleton-layer #skull :is(path, polygon, circle, ellipse) {
-    stroke: #000;
-    stroke-width: 1.38px;
+  /* A bone drawn here only whole, whose zones are marked in its own drawing
+     (see summariseZones in skeletonArtwork). Zones all marked alike look like
+     the bone marked that way; anything less takes the partial colour, a cue to
+     open the bone and see which zones. Never set on a bone that is marked in
+     its own right, so this doesn't need to outrank the rules above. */
+  [data-zones='complete'] {
+    --paint-fill: var(--paint-present);
+    --paint-edge: var(--paint-present-edge);
   }
 
-  .skeleton-layer #skull .is-selected,
-  .skeleton-layer #skull .is-selected :is(path, polygon, circle, ellipse),
-  .skeleton-layer #skull.is-selected :is(path, polygon, circle, ellipse) {
-    fill: var(--bone-selected);
-    stroke: var(--accent);
-    stroke-width: 2.8px;
+  [data-zones='absent'] {
+    --paint-fill: var(--paint-absent);
+    --paint-edge: var(--paint-absent-edge);
   }
 
-  .skeleton-layer #skull .is-selected[data-paint],
-  .skeleton-layer #skull .is-selected[data-paint] :is(path, polygon, circle, ellipse),
-  .skeleton-layer #skull.is-selected[data-paint] :is(path, polygon, circle, ellipse) {
+  [data-zones='fragmentary'] {
+    --paint-fill: var(--paint-fragmentary);
+    --paint-edge: var(--paint-fragmentary-edge);
+  }
+
+  [data-zones='partial'] {
+    --paint-fill: var(--paint-partial);
+    --paint-edge: var(--paint-partial-edge);
+  }
+
+  [data-zones],
+  [data-zones] :is(path, polygon, circle, ellipse) {
     fill: var(--paint-fill);
     stroke: var(--paint-edge);
-    stroke-width: 1.38px;
+    stroke-width: 0.9px;
   }
 
-  /* Interactive cues for the skull in the full skeleton view:
-     Soft ambient blue glow without overwriting any bone colors or clipping at viewBox boundary */
-  &:not(.skull-view) #skull {
+  /* The feet are drawn at a much larger scale than the rest, so the outline
+     weight above all but vanishes on them. Marked bones there keep the
+     drawing's own weight instead. */
+  :is(.left-foot-layer, .right-foot-layer) :is(.is-selected, .is-selected :is(path, polygon, circle, ellipse)) {
+    stroke-width: 2.4px;
+  }
+
+  /* Interactive cues for everything a click opens rather than paints: soft
+     ambient blue glow without overwriting any bone colors or clipping at
+     viewBox boundary. The skull, rib cage and feet always open their drawing
+     from the full skeleton. The scapulae and, inside the rib cage, the
+     vertebrae only do in zone mode, as bone mode marks them where they are. */
+  .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot),
+  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula),
+  &.zone-mode .ribs-layer [data-zone-drawing] {
     cursor: zoom-in;
     transition: filter 0.25s ease;
   }
 
-  &:not(.skull-view) #skull:hover {
+  .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot):hover,
+  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula):hover,
+  &.zone-mode .ribs-layer [data-zone-drawing]:hover {
     filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
   }
 
-  /* Same cue for the rib cage, which opens the spine & ribs drawing the same
-     way the skull opens its own. */
-  .skeleton-layer #spine_ribs {
-    cursor: zoom-in;
-    transition: filter 0.25s ease;
-  }
-
-  .skeleton-layer #spine_ribs:hover {
-    filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
-  }
-
-  /* And once more inside the rib cage, where a rib opens on its own. The cue is
-     dropped as soon as a rib is open, because from there a click paints. */
-  .ribs-layer :is([id^='l_rib'], [id^='r_rib']) {
-    transition: filter 0.25s ease;
-  }
-
-  &.ribs-view:not(.rib-isolated) .ribs-layer :is([id^='l_rib'], [id^='r_rib']) {
-    cursor: zoom-in;
-  }
-
-  &.ribs-view:not(.rib-isolated) .ribs-layer :is([id^='l_rib'], [id^='r_rib']):hover {
-    filter: drop-shadow(0 0 4px rgba(14, 165, 233, 0.75)) drop-shadow(0 0 8px rgba(56, 189, 248, 0.4));
+  /* Teeth are drawn but never recorded, so they don't invite a click. */
+  #teeth {
+    cursor: default;
   }
 
   /* PHASE 1: Skeleton layer smoothly zooming in (stays 100% visible while centering) */
@@ -346,19 +381,15 @@ input {
     will-change: opacity;
   }
 
-  /* Where each detail region sits in skeleton_front.svg, as a fraction of the
-     drawing: the origin is the centre of the region, the translate carries that
-     centre to the middle of the viewport, and the scale is how much of the
-     viewport the region should end up filling. Shared by all three phases so
-     the hold and the fade never drift from the zoom that set them up. */
-  .zoom-skull:is(.layer-zooming-in, .layer-zoomed-fade-out, .layer-zoomed-hold) svg {
-    transform-origin: 48.27% 6.47% !important;
-    transform: translate3d(1.73%, 43.53%, 0) scale(7.79) !important;
-  }
-
-  .zoom-ribs:is(.layer-zooming-in, .layer-zoomed-fade-out, .layer-zoomed-hold) svg {
-    transform-origin: 47.87% 27.2% !important;
-    transform: translate3d(2.13%, 22.8%, 0) scale(2.6) !important;
+  /* Where the zoom lands is measured from the region being opened as it
+     starts, and handed to the layer as custom properties (see zoomStyle in
+     SkeletonPage): the origin is the centre of the region, the translate
+     carries that centre to the middle of where the detail drawing appears, and
+     the scale makes the region as big as that drawing. Shared by all three
+     phases so the hold and the fade never drift from the zoom that set them up. */
+  :is(.layer-zooming-in, .layer-zoomed-fade-out, .layer-zoomed-hold) svg {
+    transform-origin: var(--zoom-origin-x) var(--zoom-origin-y) !important;
+    transform: translate3d(var(--zoom-shift-x), var(--zoom-shift-y), 0) scale(var(--zoom-scale)) !important;
   }
 
   /* PHASE 2 (Top Layer): Skull front SVG slowly and seamlessly fades in directly over the zoomed skull */
@@ -383,15 +414,9 @@ input {
     pointer-events: none;
   }
 
-  /* REVERSE: Skeleton layer zooms back out to full view simultaneously with toolbar retraction */
-  .zoom-skull.layer-zooming-out svg {
-    animation: zoomOutFromSkull 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
-    pointer-events: none;
-    will-change: transform;
-  }
-
-  .zoom-ribs.layer-zooming-out svg {
-    animation: zoomOutFromRibs 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  /* REVERSE: Outer layer zooms back out to full view simultaneously with toolbar retraction */
+  .layer-zooming-out svg {
+    animation: zoomOutFromDetail 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
     pointer-events: none;
     will-change: transform;
   }
@@ -475,27 +500,14 @@ input {
   }
 }
 
-@keyframes zoomOutFromSkull {
+@keyframes zoomOutFromDetail {
   0% {
-    transform-origin: 48.27% 6.47%;
-    transform: translate3d(1.73%, 43.53%, 0) scale(7.79);
+    transform-origin: var(--zoom-origin-x) var(--zoom-origin-y);
+    transform: translate3d(var(--zoom-shift-x), var(--zoom-shift-y), 0) scale(var(--zoom-scale));
     opacity: 1;
   }
   100% {
-    transform-origin: 48.27% 6.47%;
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes zoomOutFromRibs {
-  0% {
-    transform-origin: 47.87% 27.2%;
-    transform: translate3d(2.13%, 22.8%, 0) scale(2.6);
-    opacity: 1;
-  }
-  100% {
-    transform-origin: 47.87% 27.2%;
+    transform-origin: var(--zoom-origin-x) var(--zoom-origin-y);
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
   }
@@ -528,6 +540,12 @@ input {
   svg [data-preview-state='absent'] :is(path, polygon, circle, ellipse) {
     fill: #ef4444 !important;
     stroke: #b91c1c !important;
+  }
+
+  svg [data-preview-state='partial'],
+  svg [data-preview-state='partial'] :is(path, polygon, circle, ellipse) {
+    fill: #fbbf24 !important;
+    stroke: #b45309 !important;
   }
 
   svg [data-preview-state='pathological'],
