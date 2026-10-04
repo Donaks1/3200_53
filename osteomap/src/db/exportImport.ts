@@ -185,13 +185,32 @@ function parseCsvRow(text: string): string[][] {
     return rows;
 }
 
-export async function importDatabaseCSV(file: Blob): Promise<void> {
+export type ImportPreview = {
+    sites: SiteRecord[];
+    contexts: ContextRecord[];
+    cases: CaseRecord[];
+    existingSites: SiteRecord[];
+    existingContexts: ContextRecord[];
+};
+
+export type ImportChoices = {
+    sites: Record<string, string>;
+    contexts: Record<string, string>;
+};
+
+export type ImportResult = {
+    sitesCreated: number;
+    contextsCreated: number;
+    casesImported: number;
+    casesSkipped: number;
+};
+
+export async function previewDatabaseCSV(file: Blob): Promise<ImportPreview> {
     const text = await file.text();
     const rows = parseCsvRow(text);
 
     if (rows.length < 2) {
-        console.error("CSV file is empty or does not contain enough data.");
-        return;
+        throw new Error("The CSV file has no records to import.");
     }
 
     const header = rows[0];
@@ -210,6 +229,10 @@ export async function importDatabaseCSV(file: Blob): Promise<void> {
         ageGroup: col('ageGroup'),
         segmentId: col('segmentId'),
         segmentState: col('segmentState')
+    }
+
+    if (Object.values(idx).some((index) => index < 0)) {
+        throw new Error("The CSV file is missing required columns.");
     }
 
     const siteMap = new Map<string, SiteRecord>();
@@ -251,9 +274,91 @@ export async function importDatabaseCSV(file: Blob): Promise<void> {
         }
     }
 
-    await db.transaction('rw', db.sites, db.contexts, db.cases, async () => {
-        await db.sites.bulkPut(Array.from(siteMap.values()));
-        await db.contexts.bulkPut(Array.from(contextMap.values()));
-        await db.cases.bulkPut(Array.from(caseMap.values()));
+    const [existingSites, existingContexts] = await Promise.all([
+        db.sites.toArray(), db.contexts.toArray()
+    ]);
+
+    if (!caseMap.size) throw new Error("The CSV file has no cases to import.");
+
+    return {
+        sites: Array.from(siteMap.values()),
+        contexts: Array.from(contextMap.values()),
+        cases: Array.from(caseMap.values()),
+        existingSites,
+        existingContexts
+    };
+}
+
+export async function importDatabaseCSV(preview: ImportPreview, choices: ImportChoices): Promise<ImportResult> {
+    return db.transaction('rw', db.sites, db.contexts, db.cases, async () => {
+        const [currentSites, currentContexts, currentCases] = await Promise.all([
+            db.sites.toArray(), db.contexts.toArray(), db.cases.toArray()
+        ]);
+        const siteIds = new Set(currentSites.map((site) => site.siteId));
+        const contextIds = new Set(currentContexts.map((context) => context.contextId));
+        const caseIds = new Set(currentCases.map((record) => record.caseId));
+        const siteMap = new Map<string, string>();
+        const contextMap = new Map<string, string>();
+        const newSites: SiteRecord[] = [];
+        const newContexts: ContextRecord[] = [];
+        const newCases: CaseRecord[] = [];
+        let casesSkipped = 0;
+        const neededContexts = new Set(preview.cases.filter((record) => !caseIds.has(record.caseId)).map((record) => record.contextId));
+        const neededSites = new Set(preview.contexts.filter((context) => neededContexts.has(context.contextId)).map((context) => context.siteId));
+
+        for (const site of preview.sites) {
+            if (!neededSites.has(site.siteId)) continue;
+            const chosenId = choices.sites[site.siteId];
+            if (siteIds.has(site.siteId)) {
+                siteMap.set(site.siteId, site.siteId);
+            } else if (chosenId && siteIds.has(chosenId)) {
+                siteMap.set(site.siteId, chosenId);
+            } else {
+                siteMap.set(site.siteId, site.siteId);
+                siteIds.add(site.siteId);
+                newSites.push(site);
+            }
+        }
+
+        for (const context of preview.contexts) {
+            if (!neededContexts.has(context.contextId)) continue;
+            const siteId = siteMap.get(context.siteId);
+            if (!siteId) throw new Error(`Site missing for context ${context.contextName}.`);
+            const chosenId = choices.contexts[context.contextId];
+            if (contextIds.has(context.contextId)) {
+                const existing = currentContexts.find((item) => item.contextId === context.contextId);
+                if (existing?.siteId !== siteId) {
+                    throw new Error(`Context ${context.contextName} belongs to a different site in this database.`);
+                }
+                contextMap.set(context.contextId, context.contextId);
+            } else if (chosenId && currentContexts.some((existing) => existing.contextId === chosenId && existing.siteId === siteId)) {
+                contextMap.set(context.contextId, chosenId);
+            } else {
+                contextMap.set(context.contextId, context.contextId);
+                contextIds.add(context.contextId);
+                newContexts.push({ ...context, siteId });
+            }
+        }
+
+        for (const record of preview.cases) {
+            if (caseIds.has(record.caseId)) {
+                casesSkipped++;
+                continue;
+            }
+            const contextId = contextMap.get(record.contextId);
+            if (!contextId) throw new Error(`Context missing for case ${record.caseName}.`);
+            caseIds.add(record.caseId);
+            newCases.push({ ...record, contextId });
+        }
+
+        await db.sites.bulkAdd(newSites);
+        await db.contexts.bulkAdd(newContexts);
+        await db.cases.bulkAdd(newCases);
+        return {
+            sitesCreated: newSites.length,
+            contextsCreated: newContexts.length,
+            casesImported: newCases.length,
+            casesSkipped
+        };
     });
 }
