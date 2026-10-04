@@ -617,8 +617,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     )
 
     setSelected(restored)
-    setUndoStack([])
-    setRedoStack([])
+    if (previousRestore && previousRestore.caseId !== restoreKey.caseId) {
+      setUndoStack([])
+      setRedoStack([])
+    }
     restoredViewRef.current = restoreKey
   }, [caseData, activeView, transitionPhase])
 
