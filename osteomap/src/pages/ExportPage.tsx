@@ -4,15 +4,24 @@ import type { NavigateFn } from './types'
 import { getCase } from '../db/caseOperation'
 import { getContextById } from '../db/contextOperation'
 import { getSiteById } from '../db/siteOperation'
-import { exportDatabaseCSV, exportSingleCaseCSV, importDatabaseCSV } from '../db/exportImport'
+import { applyImport, exportDatabaseCSV, exportSingleCaseCSV, findImportConflicts, parseImportCSV, type ConflictResolution, type ImportConflict, type ParsedImport} from '../db/exportImport'
 import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
+import ImportConflictPopup from '../components/ImportConflictPopup'
 import './ExportPage.css'
+
+interface PendingImport {
+  parsed: ParsedImport;
+  conflicts: ImportConflict[];
+  index: number;
+  resolutions: Record<string, ConflictResolution>;
+}
 
 function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate: NavigateFn }) {
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
   const [contextData, setContextData] = useState<ContextRecord | null>(null);
   const [site, setSite] = useState<SiteRecord | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
 
   useEffect(() => {
     if (!caseId) return;
@@ -41,18 +50,58 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
 
   const zonesRecorded = Object.keys(caseData?.segmentStates ?? {}).length;
 
+  async function finishImport(parsed: ParsedImport, conflicts: ImportConflict[], resolutions: Record<string, ConflictResolution>) {
+    setPendingImport(null);
+    try {
+      await applyImport(parsed, conflicts, resolutions);
+      const skipped = conflicts.filter(c => resolutions[c.incoming.caseId] === 'skip').length;
+      const imported = parsed.cases.length - skipped;
+      setImportStatus(`Import successful! ${imported} specimen${imported === 1 ? '' : 's'} imported` +
+        (skipped ? `, ${skipped} skipped.` : '.'));
+    } catch {
+      setImportStatus("Import failed. Please check the file and try again.");
+    }
+  }
+
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
 
     setImportStatus("Importing...");
     try {
-      await importDatabaseCSV(file);
-      setImportStatus("Import successful!");
+      const parsed = await parseImportCSV(file);
+      const conflicts = await findImportConflicts(parsed);
+      if (conflicts.length === 0) {
+        await finishImport(parsed, conflicts, {});
+        return;
+      }
+      setImportStatus("Waiting for you to resolve duplicate specimens...");
+      setPendingImport({ parsed, conflicts, index: 0, resolutions: {} });
     } catch {
       setImportStatus("Import failed. Please check the file and try again.");
     }
-    event.target.value = '';
+  }
+
+  function handleResolveConflict(resolution: ConflictResolution, applyToRemaining: boolean) {
+    if (!pendingImport) return;
+    const { parsed, conflicts, index } = pendingImport;
+    const resolutions = { ...pendingImport.resolutions };
+    const lastIndex = applyToRemaining ? conflicts.length - 1 : index;
+    for (let i = index; i <= lastIndex; i++) {
+      resolutions[conflicts[i].incoming.caseId] = resolution;
+    }
+
+    if (lastIndex + 1 >= conflicts.length) {
+      void finishImport(parsed, conflicts, resolutions);
+    } else {
+      setPendingImport({ parsed, conflicts, index: lastIndex + 1, resolutions });
+    }
+  }
+
+  function handleCancelImport() {
+    setPendingImport(null);
+    setImportStatus("Import cancelled. No changes were made.");
   }
 
   return (
@@ -132,6 +181,17 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
           {importStatus && <p className="export-import-status" role="status">{importStatus}</p>}
         </div>
       </main>
+
+      {pendingImport && (
+        <ImportConflictPopup
+          key={pendingImport.index}
+          conflict={pendingImport.conflicts[pendingImport.index]}
+          position={pendingImport.index + 1}
+          total={pendingImport.conflicts.length}
+          onResolve={handleResolveConflict}
+          onCancelImport={handleCancelImport}
+        />
+      )}
     </div>
   );
 }

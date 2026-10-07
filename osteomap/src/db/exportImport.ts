@@ -51,6 +51,7 @@
 
 import { saveAs } from "file-saver";
 import { db } from "./db";
+import { createId } from "./id";
 import type { CaseRecord, ContextRecord, SiteRecord, SegmentState } from "./types";
 
 const CSV_HEADERS = [
@@ -185,13 +186,41 @@ function parseCsvRow(text: string): string[][] {
     return rows;
 }
 
-export async function importDatabaseCSV(file: Blob): Promise<void> {
+export interface ParsedImport {
+    sites: SiteRecord[];
+    contexts: ContextRecord[];
+    cases: CaseRecord[];
+}
+
+export type ConflictResolution = 'rename' | 'replace' | 'skip';
+
+export interface ImportConflict {
+    incoming: CaseRecord;
+    existing: CaseRecord;
+    // Name the incoming case will be saved as if the user chooses to keep both
+    suggestedName: string;
+}
+
+function normaliseName(name: string): string {
+    return name.trim().toLowerCase();
+}
+
+// Strips a trailing "(n)" so re-importing "uwa(1)" suggests "uwa(2)" rather than "uwa(1)(1)"
+function getAvailableName(name: string, takenNames: Set<string>): string {
+    const baseName = name.replace(/\(\d+\)$/, '');
+    let counter = 1;
+    while (takenNames.has(normaliseName(`${baseName}(${counter})`))) {
+        counter++;
+    }
+    return `${baseName}(${counter})`;
+}
+
+export async function parseImportCSV(file: Blob): Promise<ParsedImport> {
     const text = await file.text();
     const rows = parseCsvRow(text);
 
     if (rows.length < 2) {
-        console.error("CSV file is empty or does not contain enough data.");
-        return;
+        throw new Error("CSV file is empty or does not contain enough data.");
     }
 
     const header = rows[0];
@@ -251,9 +280,76 @@ export async function importDatabaseCSV(file: Blob): Promise<void> {
         }
     }
 
+    return {
+        sites: Array.from(siteMap.values()),
+        contexts: Array.from(contextMap.values()),
+        cases: Array.from(caseMap.values())
+    };
+}
+
+// A case is a duplicate if its ID already exists, or a case with the same name exists in the same context
+export async function findImportConflicts(parsed: ParsedImport): Promise<ImportConflict[]> {
+    const existingCases = await db.cases.toArray();
+    const existingById = new Map(existingCases.map(c => [c.caseId, c]));
+
+    const takenNamesByContext = new Map<string, Set<string>>();
+    const takenNames = (contextId: string) => {
+        if (!takenNamesByContext.has(contextId)) takenNamesByContext.set(contextId, new Set());
+        return takenNamesByContext.get(contextId)!;
+    };
+    for (const c of [...existingCases, ...parsed.cases]) {
+        takenNames(c.contextId).add(normaliseName(c.caseName));
+    }
+
+    const conflicts: ImportConflict[] = [];
+    for (const incoming of parsed.cases) {
+        const existing = existingById.get(incoming.caseId)
+            ?? existingCases.find(c =>
+                c.contextId === incoming.contextId &&
+                normaliseName(c.caseName) === normaliseName(incoming.caseName));
+        if (!existing) continue;
+
+        const names = takenNames(incoming.contextId);
+        const suggestedName = getAvailableName(incoming.caseName, names);
+        // Reserve the name so two renamed cases in the same context never collide
+        names.add(normaliseName(suggestedName));
+        conflicts.push({ incoming, existing, suggestedName });
+    }
+    return conflicts;
+}
+
+// Cases without an entry in `resolutions` are not duplicates and are imported as-is
+export async function applyImport(
+    parsed: ParsedImport,
+    conflicts: ImportConflict[],
+    resolutions: Record<string, ConflictResolution>
+): Promise<void> {
+    const conflictByCaseId = new Map(conflicts.map(c => [c.incoming.caseId, c]));
+    const casesToPut: CaseRecord[] = [];
+    const caseIdsToDelete: string[] = [];
+
+    for (const incoming of parsed.cases) {
+        const conflict = conflictByCaseId.get(incoming.caseId);
+        if (!conflict) {
+            casesToPut.push(incoming);
+            continue;
+        }
+
+        const resolution = resolutions[incoming.caseId] ?? 'skip';
+        if (resolution === 'rename') {
+            casesToPut.push({ ...incoming, caseId: createId(), caseName: conflict.suggestedName });
+        } else if (resolution === 'replace') {
+            if (conflict.existing.caseId !== incoming.caseId) {
+                caseIdsToDelete.push(conflict.existing.caseId);
+            }
+            casesToPut.push(incoming);
+        }
+    }
+
     await db.transaction('rw', db.sites, db.contexts, db.cases, async () => {
-        await db.sites.bulkPut(Array.from(siteMap.values()));
-        await db.contexts.bulkPut(Array.from(contextMap.values()));
-        await db.cases.bulkPut(Array.from(caseMap.values()));
+        await db.sites.bulkPut(parsed.sites);
+        await db.contexts.bulkPut(parsed.contexts);
+        await db.cases.bulkDelete(caseIdsToDelete);
+        await db.cases.bulkPut(casesToPut);
     });
 }
