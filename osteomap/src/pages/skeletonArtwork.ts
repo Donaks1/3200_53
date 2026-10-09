@@ -1,4 +1,6 @@
 import skullFrontSource from '../assets/skull_front.svg?raw'
+import skullLeftSource from '../assets/skull_left.svg?raw'
+import skullRightSource from '../assets/skull_right.svg?raw'
 import leftFootSource from '../assets/left_foot.svg?raw'
 import rightFootSource from '../assets/right_foot.svg?raw'
 import scapulaLeftSource from '../assets/scapula_left.svg?raw'
@@ -38,10 +40,12 @@ export function prepareSkeletonFront(markup: string): string {
 
 // Some drawings show a bone only whole, while its zones are recorded in a
 // drawing of their own: the feet, scapulae and hip bones on the full skeleton
-// (front and back), and the vertebrae there and in the spine view. Each such
+// (front and back), the skull from behind, and the vertebrae on the full
+// skeleton and in the spine view. Each such
 // bone is listed here with its zones, and each zone with the bones between it
 // and the whole, nearest first (a foot's zones sit inside its bones).
 const ZONE_SETS = new Map<string, Map<string, string[]>>([
+  ['skull', new Map([...zonesIn(skullFrontSource), ...zonesIn(skullLeftSource), ...zonesIn(skullRightSource)])],
   ['l_foot', zonesIn(leftFootSource)],
   ['r_foot', zonesIn(rightFootSource)],
   ['l_scapula', zonesIn(scapulaLeftSource)],

@@ -345,17 +345,18 @@ input {
   /* Interactive cues for everything a click opens rather than paints: soft
      ambient blue glow without overwriting any bone colors or clipping at
      viewBox boundary. The skull, rib cage and feet always open their drawing
-     from the full skeleton. The scapulae, hip bones and, inside the rib cage,
-     the vertebrae only do in zone mode, as bone mode marks them where they are. */
-  .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot),
-  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa),
+     from the full skeleton, front or back. The scapulae, hip bones and, inside
+     the rib cage, the vertebrae only do in zone mode, as bone mode marks them
+     where they are. */
+  .skeleton-layer :is(#skull, #spine_ribs, #l_foot, #r_foot),
+  &.zone-mode .skeleton-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa),
   &.zone-mode .ribs-layer [data-zone-drawing] {
     cursor: zoom-in;
     transition: filter 0.25s ease;
   }
 
-  .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot):hover,
-  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa):hover,
+  .skeleton-layer :is(#skull, #spine_ribs, #l_foot, #r_foot):hover,
+  &.zone-mode .skeleton-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa):hover,
   &.zone-mode .ribs-layer [data-zone-drawing]:hover {
     filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
   }

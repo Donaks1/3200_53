@@ -301,25 +301,25 @@ function rawSvgFor(view: ActiveView, vertebraId: string | null): string {
 function viewTitle(view: ActiveView, vertebraId: string | null): string {
   switch (view) {
     case 'skull-front':
-      return 'Skull — Anterior View'
+      return 'Skull — Anterior (Front) View'
     case 'skull-left':
       return 'Skull — Left Lateral View'
     case 'skull-right':
       return 'Skull — Right Lateral View'
     case 'ribs-front':
-      return 'Spine & Ribs — Anterior View'
+      return 'Spine & Ribs — Anterior (Front) View'
     case 'foot-left':
       return 'Left Foot — Dorsal View'
     case 'foot-right':
       return 'Right Foot — Dorsal View'
     case 'scapula-left':
-      return 'Left Scapula'
+      return 'Left Scapula — Anterior (Front) View'
     case 'scapula-right':
-      return 'Right Scapula'
+      return 'Right Scapula — Anterior (Front) View'
     case 'hip-left':
-      return 'Left Hip Bone (Os Coxa)'
+      return 'Left Hip Bone — Anterior (Front) View'
     case 'hip-right':
-      return 'Right Hip Bone (Os Coxa)'
+      return 'Right Hip Bone — Anterior (Front) View'
     case 'vertebra': {
       const drawing = vertebraId ? vertebraDrawingFor(vertebraId) : undefined
       return drawing && vertebraId
@@ -770,6 +770,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   // The vertebra whose drawing is open or opening, by id. The one drawing for
   // its type is relabelled to it, so this decides whose zones are on screen.
   const [openVertebraId, setOpenVertebraId] = useState<string | null>(null)
+  // Whether the detail in play was opened from the back of the skeleton, which
+  // is then the view a zoom flies through and returns to.
+  const [zoomedFromBack, setZoomedFromBack] = useState(false)
   // Where the zoom in flight is headed, measured as it starts (see zoomStyle).
   const [zoomFrame, setZoomFrame] = useState<React.CSSProperties>({})
   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle')
@@ -809,8 +812,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     transitionPhase === 'zooming-out'
   const isFlipping = transitionPhase === 'flipping-to-back' || transitionPhase === 'flipping-to-front'
   // A vertebra is zoomed into from the rib cage; everything else from the
-  // full skeleton.
-  const zoomSource = detailTarget === 'vertebra' ? 'ribs' : 'skeleton'
+  // full skeleton, front or back, whichever it was opened from.
+  const zoomSource =
+    detailTarget === 'vertebra' ? 'ribs' : zoomedFromBack ? 'skeleton-back' : 'skeleton'
 
   // Which view's sub-bar is on screen. The one being left slides out as a zoom
   // starts and the one being zoomed into slides in as its drawing fades in, or
@@ -821,7 +825,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       : transitionPhase === 'fading-in'
         ? DETAIL_VIEW[detailTarget]
         : transitionPhase === 'zooming-out'
-          ? (zoomSource === 'ribs' ? 'ribs-front' : 'skeleton')
+          ? (zoomSource === 'ribs' ? 'ribs-front' : zoomSource)
           : activeView
   const subBarTarget = subBarView ? detailTargetOf(subBarView) : null
   const isSkeletonBarVisible = subBarView === 'skeleton' || subBarView === 'skeleton-back'
@@ -1076,12 +1080,17 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   }, [caseData, selected])
 
   // Measures the zoom between a detail drawing, as `view` shows it, and the
-  // drawing it is opened from: the rib cage for a vertebra, and the full
-  // skeleton for everything else.
-  function measureZoom(target: DetailTarget, view: ActiveView, vertebraId: string | null): React.CSSProperties {
+  // drawing it is opened from: the rib cage for a vertebra, and the front or
+  // back of the full skeleton for everything else.
+  function measureZoom(
+    target: DetailTarget,
+    view: ActiveView,
+    vertebraId: string | null,
+    fromBack: boolean,
+  ): React.CSSProperties {
     const diagram = diagramRef.current
     const svg = diagram?.querySelector<SVGSVGElement>(
-      target === 'vertebra' ? '.ribs-layer svg' : '.skeleton-front-layer svg',
+      target === 'vertebra' ? '.ribs-layer svg' : fromBack ? '.skeleton-back-layer svg' : '.skeleton-front-layer svg',
     )
     const landing = diagram?.querySelector<HTMLElement>(`.${DETAIL_LAYER[target]}`)
     const regionSelector =
@@ -1103,7 +1112,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   function zoomToDetail(target: DetailTarget, vertebraId: string | null = null) {
     if (transitionPhase !== 'idle') return
 
-    setZoomFrame(measureZoom(target, DETAIL_VIEW[target], vertebraId))
+    // A vertebra opens from the rib cage, which keeps the side it was opened from.
+    const fromBack = target === 'vertebra' ? zoomedFromBack : activeView === 'skeleton-back'
+    setZoomedFromBack(fromBack)
+    setZoomFrame(measureZoom(target, DETAIL_VIEW[target], vertebraId, fromBack))
     setDetailTarget(target)
 
     // Step 1: Smoothly zoom into the region while keeping the outer drawing 100% visible
@@ -1134,14 +1146,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     if (transitionPhase !== 'idle') return
 
     const toRibs = detailTarget === 'vertebra'
-    setZoomFrame(measureZoom(detailTarget, activeView, openVertebraId))
+    setZoomFrame(measureZoom(detailTarget, activeView, openVertebraId, zoomedFromBack))
 
     // Immediately hide the detail layer and start zooming out the outer drawing and retracting toolbar simultaneously
     setTransitionPhase('zooming-out')
 
     // Settle back on the outer view once animations complete (500ms)
     setTimeout(() => {
-      setActiveView(toRibs ? 'ribs-front' : 'skeleton')
+      setActiveView(toRibs ? 'ribs-front' : zoomedFromBack ? 'skeleton-back' : 'skeleton')
       if (toRibs) setDetailTarget('ribs')
       setTransitionPhase('idle')
     }, 500)
@@ -1226,9 +1238,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
     const rawTarget = event.target as Element
 
-    // Clicking the skull, the rib cage or a foot in the anterior skeleton view
+    // Clicking the skull, the rib cage or a foot in either skeleton view
     // triggers the smooth zoom into that detail drawing rather than painting it.
-    if (activeView === 'skeleton') {
+    // The back opens the same drawings as the front; their titles say which
+    // side each one is drawn from.
+    if (activeView === 'skeleton' || activeView === 'skeleton-back') {
       if (rawTarget.closest('#skull')) {
         zoomToDetail('skull')
         return
@@ -1737,7 +1751,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             <button
               type="button"
               onClick={() => zoomToDetail('skull')}
-              disabled={activeView !== 'skeleton'}
+              disabled={activeView !== 'skeleton' && activeView !== 'skeleton-back'}
               className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
               title="Zoom to detailed skull view"
               tabIndex={isSkeletonBarVisible ? 0 : -1}
@@ -1749,7 +1763,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             <button
               type="button"
               onClick={() => zoomToDetail('ribs')}
-              disabled={activeView !== 'skeleton'}
+              disabled={activeView !== 'skeleton' && activeView !== 'skeleton-back'}
               className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
               title="Zoom to detailed spine and ribs view"
               tabIndex={isSkeletonBarVisible ? 0 : -1}
@@ -1834,13 +1848,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         <div
           className={[
             'diagram-layer skeleton-layer skeleton-back-layer',
+            ...(zoomSource === 'skeleton-back' ? zoomSourceClasses : []),
             transitionPhase === 'flipping-to-back' ? 'layer-flip-in-back' : '',
             transitionPhase === 'flipping-to-front' ? 'layer-flip-out-back' : '',
-            activeView !== 'skeleton-back' && transitionPhase === 'idle' ? 'layer-hidden' : '',
-            activeView !== 'skeleton-back' && transitionPhase !== 'flipping-to-back' && transitionPhase !== 'flipping-to-front' ? 'layer-hidden' : '',
+            activeView !== 'skeleton-back' && !isFlipping && !(isZooming && zoomSource === 'skeleton-back') ? 'layer-hidden' : '',
           ]
             .filter(Boolean)
             .join(' ')}
+          style={zoomSource === 'skeleton-back' ? zoomFrame : undefined}
           dangerouslySetInnerHTML={skeletonBackMarkup}
         />
 

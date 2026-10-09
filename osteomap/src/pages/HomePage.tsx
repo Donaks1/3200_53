@@ -7,7 +7,7 @@ import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/type
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
 import SkeletonPreview from '../components/SkeletonPreview'
-import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, Sparkles, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
 
 function formatDate(isoString?: string): string {
   if (!isoString) return 'Recently'
@@ -633,8 +633,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
                           {activeCase.ageGroup}
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-2xs">
-                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="inline-flex items-center rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-semibold text-emerald-700 shadow-2xs">
                         {activeRecordedBonesCount} bones recorded
                       </span>
                       {activeAbsentBonesCount > 0 && (
