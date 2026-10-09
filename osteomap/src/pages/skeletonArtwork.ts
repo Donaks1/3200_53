@@ -3,6 +3,8 @@ import leftFootSource from '../assets/left_foot.svg?raw'
 import rightFootSource from '../assets/right_foot.svg?raw'
 import scapulaLeftSource from '../assets/scapula_left.svg?raw'
 import scapulaRightSource from '../assets/scapula_right.svg?raw'
+import leftHipSource from '../assets/left_pelvis.svg?raw'
+import rightHipSource from '../assets/right_pelvis.svg?raw'
 import cervicalVertebraSource from '../assets/cervical_vertebra.svg?raw'
 import thoracicVertebraSource from '../assets/thoracic_vertebra.svg?raw'
 import lumbarVertebraSource from '../assets/lumbar_vertebra.svg?raw'
@@ -26,43 +28,17 @@ export const vertebraDrawingFor = (vertebraId: string) =>
 // skeleton previews.
 export function prepareSkeletonFront(markup: string): string {
   return withDetailSkull(
-    groupPelvis(
-      // In zone mode the scapula opens a drawing of its own, where l_scapula_1
-      // is one of nine zones. Here the same id names the outline of the whole
-      // bone, so it gives the id up rather than light the full scapula whenever
-      // that one zone is marked. The bone itself is still the l_scapula group.
-      markup.replace(/ id="[lr]_scapula_1"/g, ''),
-    ),
+    // In zone mode the scapula opens a drawing of its own, where l_scapula_1
+    // is one of nine zones. Here the same id names the outline of the whole
+    // bone, so it gives the id up rather than light the full scapula whenever
+    // that one zone is marked. The bone itself is still the l_scapula group.
+    markup.replace(/ id="[lr]_scapula_1"/g, ''),
   )
 }
 
-const PELVIS_ZONES = ['pelvis_1', 'pelvis_2']
-
-// The front skeleton draws the pelvis as loose shapes, so bone mode had no bone
-// to select there, and its main shape was called pelvis, which is the back
-// view's id for the whole bone. Gathering the two bony shapes into a pelvis
-// group, with the main one renamed pelvis_1, makes the pelvis the same bone
-// with two zones in both views. Drawing order is kept, so it looks the same.
-function groupPelvis(markup: string): string {
-  const skeleton = new DOMParser().parseFromString(markup, 'image/svg+xml')
-  const main = skeleton.getElementById('pelvis')
-  const lower = skeleton.getElementById('pelvis_2')
-  if (main?.tagName.toLowerCase() !== 'path' || !lower || main.parentElement !== lower.parentElement) return markup
-
-  const [first, second] =
-    main.compareDocumentPosition(lower) & Node.DOCUMENT_POSITION_FOLLOWING ? [main, lower] : [lower, main]
-  const pelvis = skeleton.createElementNS('http://www.w3.org/2000/svg', 'g')
-  pelvis.id = 'pelvis'
-  first.before(pelvis)
-  main.id = 'pelvis_1'
-  pelvis.append(first, second)
-
-  return new XMLSerializer().serializeToString(skeleton.documentElement)
-}
-
 // Some drawings show a bone only whole, while its zones are recorded in a
-// drawing of their own: the feet and scapulae on the full skeleton, the
-// vertebrae there and in the spine view, the pelvis in the back view. Each such
+// drawing of their own: the feet, scapulae and hip bones on the full skeleton
+// (front and back), and the vertebrae there and in the spine view. Each such
 // bone is listed here with its zones, and each zone with the bones between it
 // and the whole, nearest first (a foot's zones sit inside its bones).
 const ZONE_SETS = new Map<string, Map<string, string[]>>([
@@ -70,7 +46,8 @@ const ZONE_SETS = new Map<string, Map<string, string[]>>([
   ['r_foot', zonesIn(rightFootSource)],
   ['l_scapula', zonesIn(scapulaLeftSource)],
   ['r_scapula', zonesIn(scapulaRightSource)],
-  ['pelvis', new Map(PELVIS_ZONES.map((zone) => [zone, []]))],
+  ['l_oscoxa', zonesIn(leftHipSource)],
+  ['r_oscoxa', zonesIn(rightHipSource)],
   ...VERTEBRA_DRAWINGS.flatMap(({ count, prefix, source, zonePrefix }) =>
     Array.from({ length: count }, (_, index): [string, Map<string, string[]>] => {
       const vertebraId = `${prefix}${index + 1}`

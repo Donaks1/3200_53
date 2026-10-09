@@ -17,8 +17,8 @@
   --paint-absent-edge: #b91c1c;
   --paint-fragmentary: #60a5fa;
   --paint-fragmentary-edge: #1d4ed8;
-  --paint-partial: #fbbf24;
-  --paint-partial-edge: #b45309;
+  --paint-partial: #c084fc;
+  --paint-partial-edge: #7e22ce;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -59,8 +59,8 @@
     --paint-absent-edge: #fca5a5;
     --paint-fragmentary: #3b82f6;
     --paint-fragmentary-edge: #93c5fd;
-    --paint-partial: #f59e0b;
-    --paint-partial-edge: #fcd34d;
+    --paint-partial: #a855f7;
+    --paint-partial-edge: #d8b4fe;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -345,23 +345,23 @@ input {
   /* Interactive cues for everything a click opens rather than paints: soft
      ambient blue glow without overwriting any bone colors or clipping at
      viewBox boundary. The skull, rib cage and feet always open their drawing
-     from the full skeleton. The scapulae and, inside the rib cage, the
-     vertebrae only do in zone mode, as bone mode marks them where they are. */
+     from the full skeleton. The scapulae, hip bones and, inside the rib cage,
+     the vertebrae only do in zone mode, as bone mode marks them where they are. */
   .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot),
-  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula),
+  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa),
   &.zone-mode .ribs-layer [data-zone-drawing] {
     cursor: zoom-in;
     transition: filter 0.25s ease;
   }
 
   .skeleton-front-layer :is(#skull, #spine_ribs, #l_foot, #r_foot):hover,
-  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula):hover,
+  &.zone-mode .skeleton-front-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa):hover,
   &.zone-mode .ribs-layer [data-zone-drawing]:hover {
     filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
   }
 
-  /* Teeth are drawn but never recorded, so they don't invite a click. */
-  #teeth {
+  /* Teeth and cartilage are drawn but never recorded, so they don't invite a click. */
+  :is(#teeth, [id*='cartilage']) {
     cursor: default;
   }
 
@@ -544,8 +544,8 @@ input {
 
   svg [data-preview-state='partial'],
   svg [data-preview-state='partial'] :is(path, polygon, circle, ellipse) {
-    fill: #fbbf24 !important;
-    stroke: #b45309 !important;
+    fill: #c084fc !important;
+    stroke: #7e22ce !important;
   }
 
   svg [data-preview-state='pathological'],

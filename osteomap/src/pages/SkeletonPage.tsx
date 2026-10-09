@@ -11,6 +11,8 @@ import leftFootSource from '../assets/left_foot.svg?raw'
 import rightFootSource from '../assets/right_foot.svg?raw'
 import scapulaLeftSource from '../assets/scapula_left.svg?raw'
 import scapulaRightSource from '../assets/scapula_right.svg?raw'
+import leftHipSource from '../assets/left_pelvis.svg?raw'
+import rightHipSource from '../assets/right_pelvis.svg?raw'
 import type { CaseRecord, SegmentState } from '../db/types'
 import { ArrowLeft, ArrowRight, Bone, CheckCheck, Eye, FlipHorizontal, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
 import { getCase, setAllSegmentStates, updateCaseMetadata } from '../db/caseOperation'
@@ -71,8 +73,8 @@ function gatherInto(svg: Element, id: string) {
   svg.append(group)
 }
 
-// Readied so marks made in the skull, scapula and pelvis drawings land on it
-// too (see skeletonArtwork).
+// Readied so marks made in the skull and scapula drawings land on it too (see
+// skeletonArtwork).
 const skeletonFront = prepareSkeletonFront(scopeSvg(skeletonFrontSource, 'front'))
 
 const skeletonBack = scopeSvg(skeletonBackSource, 'back')
@@ -144,9 +146,11 @@ const ribsSpineFront = groupRibsAndVertebrae(ribsSpineNormalised)
 const leftFoot = editSvg(scopeSvg(leftFootSource, 'left-foot'), (svg) => gatherInto(svg, 'l_foot'))
 const rightFoot = editSvg(scopeSvg(rightFootSource, 'right-foot'), (svg) => gatherInto(svg, 'r_foot'))
 
-// The scapula is a single bone drawn as nine loose zones.
+// The scapula and the hip bone (os coxa) are each a single bone drawn as loose zones.
 const scapulaLeft = editSvg(scopeSvg(scapulaLeftSource, 'scapula-left'), (svg) => gatherInto(svg, 'l_scapula'))
 const scapulaRight = editSvg(scopeSvg(scapulaRightSource, 'scapula-right'), (svg) => gatherInto(svg, 'r_scapula'))
+const leftHip = editSvg(scopeSvg(leftHipSource, 'hip-left'), (svg) => gatherInto(svg, 'l_oscoxa'))
+const rightHip = editSvg(scopeSvg(rightHipSource, 'hip-right'), (svg) => gatherInto(svg, 'r_oscoxa'))
 
 // Hoisted so the prop keeps the same object identity across renders. React 19
 // compares dangerouslySetInnerHTML by reference, so an inline literal would
@@ -162,6 +166,8 @@ const leftFootMarkup = { __html: leftFoot }
 const rightFootMarkup = { __html: rightFoot }
 const scapulaLeftMarkup = { __html: scapulaLeft }
 const scapulaRightMarkup = { __html: scapulaRight }
+const leftHipMarkup = { __html: leftHip }
+const rightHipMarkup = { __html: rightHip }
 const noMarkup = { __html: '' }
 
 // Built on first use and kept for the same reason as the markup above.
@@ -191,12 +197,26 @@ type ActiveView =
   | 'foot-right'
   | 'scapula-left'
   | 'scapula-right'
+  | 'hip-left'
+  | 'hip-right'
   | 'vertebra'
 
 // Which detail drawing a zoom lands on, which is also the layer that holds it.
 // Held separately from the view because the animation runs while the view is
 // still the one being zoomed in from.
-type DetailTarget = 'skull' | 'ribs' | 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula' | 'vertebra'
+type DetailTarget =
+  | 'skull'
+  | 'ribs'
+  | 'l_foot'
+  | 'r_foot'
+  | 'l_scapula'
+  | 'r_scapula'
+  | 'l_oscoxa'
+  | 'r_oscoxa'
+  | 'vertebra'
+
+// Paired bones whose sides are both open at once in the detail view.
+type PairedTarget = 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula' | 'l_oscoxa' | 'r_oscoxa'
 
 // The view each zoom settles on.
 const DETAIL_VIEW: Record<DetailTarget, ActiveView> = {
@@ -206,6 +226,8 @@ const DETAIL_VIEW: Record<DetailTarget, ActiveView> = {
   r_foot: 'foot-right',
   l_scapula: 'scapula-left',
   r_scapula: 'scapula-right',
+  l_oscoxa: 'hip-left',
+  r_oscoxa: 'hip-right',
   vertebra: 'vertebra',
 }
 
@@ -216,6 +238,8 @@ const DETAIL_LAYER: Record<DetailTarget, string> = {
   r_foot: 'right-foot-layer',
   l_scapula: 'left-scapula-layer',
   r_scapula: 'right-scapula-layer',
+  l_oscoxa: 'left-hip-layer',
+  r_oscoxa: 'right-hip-layer',
   vertebra: 'vertebra-layer',
 }
 
@@ -229,6 +253,8 @@ const DETAIL_REGION: Record<Exclude<DetailTarget, 'vertebra'>, string> = {
   r_foot: '#r_foot',
   l_scapula: '#l_scapula',
   r_scapula: '#r_scapula',
+  l_oscoxa: '#l_oscoxa',
+  r_oscoxa: '#r_oscoxa',
 }
 
 function detailTargetOf(view: ActiveView): DetailTarget | null {
@@ -256,6 +282,10 @@ function rawSvgFor(view: ActiveView, vertebraId: string | null): string {
       return scapulaLeft
     case 'scapula-right':
       return scapulaRight
+    case 'hip-left':
+      return leftHip
+    case 'hip-right':
+      return rightHip
     case 'vertebra':
       return vertebraMarkup(vertebraId).__html
     case 'skeleton-back':
@@ -286,6 +316,10 @@ function viewTitle(view: ActiveView, vertebraId: string | null): string {
       return 'Left Scapula'
     case 'scapula-right':
       return 'Right Scapula'
+    case 'hip-left':
+      return 'Left Hip Bone (Os Coxa)'
+    case 'hip-right':
+      return 'Right Hip Bone (Os Coxa)'
     case 'vertebra': {
       const drawing = vertebraId ? vertebraDrawingFor(vertebraId) : undefined
       return drawing && vertebraId
@@ -331,9 +365,10 @@ const PAINT_STATE_BY_SEGMENT: Partial<Record<SegmentState, PaintState>> = {
 // A marked segment and the colour it was marked with.
 type PaintedSegment = { element: Element; paint: PaintState }
 
-// Teeth are drawn so the skull reads as a skull, but they aren't recorded:
-// they can't be selected in either mode, searched for or marked in bulk.
-const isTooth = (element: Element) => element.closest('#teeth') !== null
+// Teeth and cartilage (the discs between vertebrae, the pubic symphysis) are
+// drawn so the skeleton reads as one, but they aren't recorded: they can't be
+// selected in either mode, searched for or marked in bulk.
+const isUnrecorded = (element: Element) => element.closest('#teeth, [id*="cartilage"]') !== null
 
 // A bone is a <g> and its zones are the shapes drawn inside it. Groups are never
 // painted and so can never be the click target themselves — the click always
@@ -348,7 +383,7 @@ function selectionAt(
 ): Element | null {
   // Landing outside the drawing, or on the root, means the click missed the skeleton.
   if (!svg.contains(target) || target === svg) return null
-  if (isTooth(target)) return null
+  if (isUnrecorded(target)) return null
   return mode === 'zone' ? target : target.closest('g')
 }
 
@@ -363,6 +398,7 @@ function boneLabel(id: string) {
     .replace(/^l_/, 'left_')
     .replace(/^r_/, 'right_')
     .replace(/rib(\d)/, 'rib $1')
+    .replace('oscoxa', 'os coxa')
     .replaceAll(/[_-]/g, ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
@@ -539,7 +575,7 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
 
   return [...document.querySelectorAll<SVGElement>('[id]')]
     .filter((element) => {
-      if (isTooth(element)) return false
+      if (isUnrecorded(element)) return false
       const isGroup = element.tagName.toLowerCase() === 'g'
       return mode === 'bone' ? isGroup : !isGroup && element.closest('g') !== null
     })
@@ -793,6 +829,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const isRibsBarVisible = subBarTarget === 'ribs'
   const isFootBarVisible = subBarTarget === 'l_foot' || subBarTarget === 'r_foot'
   const isScapulaBarVisible = subBarTarget === 'l_scapula' || subBarTarget === 'r_scapula'
+  const isHipBarVisible = subBarTarget === 'l_oscoxa' || subBarTarget === 'r_oscoxa'
   const isVertebraBarVisible = subBarTarget === 'vertebra'
 
   // The same segment is often drawn in more than one view at once (a skull zone
@@ -862,9 +899,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
         try {
           const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
-          // Records from before teeth stopped being recordable may still name
-          // them, and a tooth painted now could never be cleared again.
-          return element && !isTooth(element) ? [{ element, paint }] : []
+          // Records from before teeth and cartilage stopped being recordable
+          // may still name them, and once painted they could never be cleared.
+          return element && !isUnrecorded(element) ? [{ element, paint }] : []
         } catch (e) {
           console.warn(`Could not select segment #${segmentId}:`, e)
           return []
@@ -1019,10 +1056,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       })
   }, [selected])
 
-  // Where a bone is drawn only whole (a foot or scapula on the full skeleton,
-  // a vertebra in the spine view), marks on its zones made in its own drawing
-  // would otherwise leave no trace. Those drawings show what the zones add up
-  // to instead (see summariseZones), unless the bone is marked in its own right.
+  // Where a bone is drawn only whole (a foot, scapula or hip bone on the full
+  // skeleton, a vertebra in the spine view), marks on its zones made in its own
+  // drawing would otherwise leave no trace. Those drawings show what the zones
+  // add up to instead (see summariseZones), unless the bone is marked itself.
   useEffect(() => {
     const diagram = diagramRef.current
     if (!diagram || !caseData?.segmentStates) return
@@ -1112,7 +1149,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   // Both sides of a paired bone are always mounted, so moving between them
   // inside the detail view is only a matter of which one shows.
-  function showSide(target: 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula') {
+  function showSide(target: PairedTarget) {
     if (transitionPhase !== 'idle') return
     setDetailTarget(target)
     setActiveView(DETAIL_VIEW[target])
@@ -1205,11 +1242,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         zoomToDetail(foot.id === 'l_foot' ? 'l_foot' : 'r_foot')
         return
       }
-      // A scapula is a single bone, so bone mode marks it from here like any
-      // other. Only its zones need the drawing of its own.
-      const scapula = selectionMode === 'zone' ? rawTarget.closest('#l_scapula, #r_scapula') : null
-      if (scapula) {
-        zoomToDetail(scapula.id === 'l_scapula' ? 'l_scapula' : 'r_scapula')
+      // A scapula or hip bone is a single bone, so bone mode marks it from here
+      // like any other. Only its zones need the drawing of its own.
+      const single =
+        selectionMode === 'zone' ? rawTarget.closest('#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa') : null
+      if (single) {
+        zoomToDetail(single.id as PairedTarget)
         return
       }
     }
@@ -1654,6 +1692,30 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           />
         </DetailSubBar>
 
+        {/* Hip Bone View Mode Sub-Bar attached directly to bottom of header */}
+        <DetailSubBar visible={isHipBarVisible}>
+          <SubBarBackButton onClick={zoomBackOut} title="Return to full skeleton view">
+            <span className="hidden sm:inline">Full </span>Skeleton
+          </SubBarBackButton>
+
+          <ViewToggle
+            options={[
+              {
+                label: <>Left<span className="hidden sm:inline"> Hip</span></>,
+                title: 'View Left Hip Bone',
+                active: activeView === 'hip-left',
+                onSelect: () => showSide('l_oscoxa'),
+              },
+              {
+                label: <>Right<span className="hidden sm:inline"> Hip</span></>,
+                title: 'View Right Hip Bone',
+                active: activeView === 'hip-right',
+                onSelect: () => showSide('r_oscoxa'),
+              },
+            ]}
+          />
+        </DetailSubBar>
+
         {/* Vertebra View Mode Sub-Bar attached directly to bottom of header */}
         <DetailSubBar visible={isVertebraBarVisible}>
           <SubBarBackButton onClick={zoomBackOut} title="Return to the spine and ribs view">
@@ -1801,13 +1863,15 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           dangerouslySetInnerHTML={ribsSpineFrontMarkup}
         />
 
-        {/* Layers 5–8: Feet and Scapulae, one layer per side */}
+        {/* Layers 5–10: Feet, Scapulae and Hip Bones, one layer per side */}
         <div className={detailLayerClass('l_foot')} dangerouslySetInnerHTML={leftFootMarkup} />
         <div className={detailLayerClass('r_foot')} dangerouslySetInnerHTML={rightFootMarkup} />
         <div className={detailLayerClass('l_scapula')} dangerouslySetInnerHTML={scapulaLeftMarkup} />
         <div className={detailLayerClass('r_scapula')} dangerouslySetInnerHTML={scapulaRightMarkup} />
+        <div className={detailLayerClass('l_oscoxa')} dangerouslySetInnerHTML={leftHipMarkup} />
+        <div className={detailLayerClass('r_oscoxa')} dangerouslySetInnerHTML={rightHipMarkup} />
 
-        {/* Layer 9: The open vertebra, in the superior view of its type */}
+        {/* Layer 11: The open vertebra, in the superior view of its type */}
         <div className={detailLayerClass('vertebra')} dangerouslySetInnerHTML={vertebraMarkup(openVertebraId)} />
 
         <div
@@ -1899,8 +1963,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
               </div>
 
               <p className="flex items-center gap-2 px-1 text-left text-[11px] font-medium text-slate-500">
-                <span className="h-3 w-3 shrink-0 rounded-full bg-amber-400 ring-1 ring-black/10" />
-                Amber: only some of the bone's zones are marked. Open it to see which.
+                <span className="h-3 w-3 shrink-0 rounded-full bg-purple-400 ring-1 ring-black/10" />
+                Purple: only some of the bone's zones are marked. Open it to see which.
               </p>
             </div>
           </div>
