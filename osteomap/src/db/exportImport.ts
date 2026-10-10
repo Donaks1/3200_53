@@ -1,69 +1,20 @@
-// import { saveAs } from "file-saver";
-// import { db } from "./db";
-// import { exportDB } from "dexie-export-import";
-
-// export async function exportDatabase(): Promise<void> {
-//     try {
-//         const blob = await exportDB(db);
-//         saveAs(blob, "osteomap_database.json");
-//     } catch (error) {
-//         console.error("Error exporting database:", error);
-//     }
-// }
-
-// export async function exportSingleCase(caseId: string): Promise<void> {
-//     try {
-//         const caseRecord = await db.cases.get(caseId);
-//         if (!caseRecord) {
-//             throw new Error(`Case with ID ${caseId} not found.`);
-//         }
-
-//         const contextRecord = await db.contexts.get(caseRecord.contextId);
-//         const siteRecord = contextRecord ? await db.sites.get(contextRecord.siteId) : undefined;
-
-//         const blob = await exportDB(db, {
-//             filter: (tableName, value) => {
-//                 if (tableName === "cases") return value.caseId === caseId;
-//                 if (tableName === "contexts") return value.contextId === caseRecord.contextId;
-//                 if (tableName === "sites") return value.siteId === siteRecord?.siteId;
-//                 return false;
-//             }
-//         });
-//         saveAs(blob, `osteomap_case_${caseRecord.caseName}.json`);
-//     } catch (error) {
-//         console.error("Error exporting single case:", error);
-//     }
-// }
-
-
-// export async function importDatabase(file: Blob): Promise<void> {
-//     try {
-//         await db.import(file, {
-//             clearTablesBeforeImport: false,
-//             overwriteValues: true,
-//         });
-//         console.log("Database imported successfully.");
-//     } catch (error) {
-//         console.error("Error importing database:", error);
-//     }
-// }
-
-
 import { saveAs } from "file-saver";
 import { db } from "./db";
 import { createId } from "./id";
 import type { CaseRecord, ContextRecord, SiteRecord, SegmentState } from "./types";
 
-const CSV_HEADERS = [
-    'siteId', 'siteName',
-    'contextId', 'contextName',
-    'caseId', 'caseName',
-    'dateCreated', 'dateModified', 'fieldNotes', 'sex', 'ageGroup',
-    'segmentId', 'segmentState'
-];
+const SPECIMENS_TITLE = 'SPECIMENS';
+const INVENTORY_TITLE = 'INVENTORY';
+const SPECIMEN_HEADERS = [
+    'Specimen ID', 'Site ID', 'Context ID',
+    'Site', 'Context', 'Specimen', 'Sex', 'Age Group', 'Field Notes', 'Date Created', 'Date Modified'
+] as const;
+const REQUIRED_SPECIMEN_HEADERS = ['Specimen ID', 'Site', 'Context', 'Specimen'] as const;
+const BONE_HEADER = 'Bone';
+const SEGMENT_STATES: SegmentState[] = ['complete', 'absent', 'fragmentary'];
 
 function escapeCsv(value: string): string {
-    if (/[",\n]/.test(value)) {
+    if (/[",\n\r]/.test(value)) {
         return `"${value.replace(/"/g, '""')}"`;
     }
     return value;
@@ -73,28 +24,66 @@ function toCsvRow(fields: string[]): string {
     return fields.map(escapeCsv).join(',');
 }
 
-function caseToCsvRows(caseRecord: CaseRecord, contextRecord: ContextRecord | undefined, siteRecord: SiteRecord | undefined): string[] {
-    const base = [
-        siteRecord?.siteId || '',
-        siteRecord?.siteName || '',
-        contextRecord?.contextId || '',
-        contextRecord?.contextName || '',
-        caseRecord.caseId,
-        caseRecord.caseName,
-        caseRecord.dateCreated,
-        caseRecord.dateModified,
-        caseRecord.fieldNotes || '',
-        caseRecord.sex || '',
-        caseRecord.ageGroup || ''
-    ];
+function compareSegmentIds(a: string, b: string): number {
+    const stripSide = (id: string) => id.replace(/^[lr]_/, '');
+    return stripSide(a).localeCompare(stripSide(b)) || a.localeCompare(b);
+}
 
-    const segmentEntries = Object.entries(caseRecord.segmentStates);
+interface SpecimenLabelSource {
+    caseId: string;
+    caseName: string;
+    siteName: string;
+    contextName: string;
+}
 
-    if (segmentEntries.length === 0) {
-        return [toCsvRow([...base, '', ''])];
+function getSpecimenLabels(specimens: SpecimenLabelSource[]): string[] {
+    const countBy = (keys: string[]) => keys.reduce((counts, key) => counts.set(key, (counts.get(key) ?? 0) + 1), new Map<string, number>());
+
+    const names = specimens.map(s => s.caseName);
+    const nameCounts = countBy(names.map(normaliseName));
+    const withLocation = specimens.map((s, i) =>
+        nameCounts.get(normaliseName(names[i]))! > 1 ? `${s.caseName} (${s.siteName} / ${s.contextName})` : s.caseName);
+    const locationCounts = countBy(withLocation.map(normaliseName));
+
+    return specimens.map((s, i) =>
+        locationCounts.get(normaliseName(withLocation[i]))! > 1 ? `${withLocation[i]} [${s.caseId}]` : withLocation[i]);
+}
+
+function buildCsv(cases: CaseRecord[], contextMap: Map<string, ContextRecord>, siteMap: Map<string, SiteRecord>): string {
+    const rows = [SPECIMENS_TITLE, toCsvRow([...SPECIMEN_HEADERS])];
+    const labelSources: SpecimenLabelSource[] = [];
+    for (const caseRecord of cases) {
+        const contextRecord = contextMap.get(caseRecord.contextId);
+        const siteRecord = contextRecord ? siteMap.get(contextRecord.siteId) : undefined;
+        labelSources.push({
+            caseId: caseRecord.caseId,
+            caseName: caseRecord.caseName,
+            siteName: siteRecord?.siteName || '',
+            contextName: contextRecord?.contextName || ''
+        });
+        rows.push(toCsvRow([
+            caseRecord.caseId,
+            siteRecord?.siteId || '',
+            contextRecord?.contextId || '',
+            siteRecord?.siteName || '',
+            contextRecord?.contextName || '',
+            caseRecord.caseName,
+            caseRecord.sex || '',
+            caseRecord.ageGroup || '',
+            caseRecord.fieldNotes || '',
+            caseRecord.dateCreated,
+            caseRecord.dateModified
+        ]));
     }
 
-    return segmentEntries.map(([segmentId, segmentState]) => toCsvRow([...base, segmentId, segmentState]));
+    // Only bones recorded on at least one exported specimen get a row
+    const segmentIds = Array.from(new Set(cases.flatMap(c => Object.keys(c.segmentStates ?? {})))).sort(compareSegmentIds);
+
+    rows.push('', INVENTORY_TITLE, toCsvRow([BONE_HEADER, ...getSpecimenLabels(labelSources)]));
+    for (const segmentId of segmentIds) {
+        rows.push(toCsvRow([segmentId, ...cases.map(c => c.segmentStates?.[segmentId] ?? '')]));
+    }
+    return rows.join('\n');
 }
 
 export async function exportSingleCaseCSV(caseId: string): Promise<void> {
@@ -107,8 +96,12 @@ export async function exportSingleCaseCSV(caseId: string): Promise<void> {
         const contextRecord = await db.contexts.get(caseRecord.contextId);
         const siteRecord = contextRecord ? await db.sites.get(contextRecord.siteId) : undefined;
 
-        const csvRows = [toCsvRow(CSV_HEADERS), ...caseToCsvRows(caseRecord, contextRecord, siteRecord)];
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        const csv = buildCsv(
+            [caseRecord],
+            new Map(contextRecord ? [[contextRecord.contextId, contextRecord]] : []),
+            new Map(siteRecord ? [[siteRecord.siteId, siteRecord]] : [])
+        );
+        const blob = new Blob([csv], { type: 'text/csv' });
         saveAs(blob, `osteomap_case_${caseRecord.caseName}.csv`);
     } catch (error) {
         console.error("Error exporting single case to CSV:", error);
@@ -126,14 +119,7 @@ export async function exportDatabaseCSV(): Promise<void> {
         const contextMap = new Map(contexts.map(ctx => [ctx.contextId, ctx]));
         const siteMap = new Map(sites.map(site => [site.siteId, site]));
 
-        const csvRows = [toCsvRow(CSV_HEADERS)];
-        for (const caseRecord of cases) {
-            const contextRecord = contextMap.get(caseRecord.contextId);
-            const siteRecord = contextRecord ? siteMap.get(contextRecord.siteId) : undefined;
-            csvRows.push(...caseToCsvRows(caseRecord, contextRecord, siteRecord));
-        }
-
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        const blob = new Blob([buildCsv(cases, contextMap, siteMap)], { type: 'text/csv' });
         saveAs(blob, "osteomap_database.csv");
     } catch (error) {
         console.error("Error exporting database to CSV:", error);
@@ -199,29 +185,54 @@ function getAvailableName(name: string, takenNames: Set<string>): string {
     return `${baseName}(${counter})`;
 }
 
-function getRequiredColumnIndexes(header: string[]) {
-    const col = (name: string) => header.indexOf(name);
-    const idx = {
-        siteId: col('siteId'),
-        siteName: col('siteName'),
-        contextId: col('contextId'),
-        contextName: col('contextName'),
-        caseId: col('caseId'),
-        caseName: col('caseName'),
-        dateCreated: col('dateCreated'),
-        dateModified: col('dateModified'),
-        fieldNotes: col('fieldNotes'),
-        sex: col('sex'),
-        ageGroup: col('ageGroup'),
-        segmentId: col('segmentId'),
-        segmentState: col('segmentState')
-    };
+function cell(row: string[], index: number): string {
+    return (index >= 0 ? row[index] ?? '' : '').trim();
+}
 
-    if (Object.values(idx).some((index) => index < 0)) {
-        throw new Error("The CSV file is missing required columns.");
+// A title row has the title in its first cell and nothing else (Excel may pad it with empty cells)
+function isTitleRow(row: string[], title: string): boolean {
+    return cell(row, 0).toUpperCase() === title && row.slice(1).every(value => !value.trim());
+}
+
+// Splits the file into the rows of the SPECIMENS and INVENTORY tables (each starting with its header row)
+function splitTables(rows: string[][]): { specimenRows: string[][]; inventoryRows: string[][] } {
+    const specimensStart = rows.findIndex(row => isTitleRow(row, SPECIMENS_TITLE));
+    const inventoryStart = rows.findIndex(row => isTitleRow(row, INVENTORY_TITLE));
+
+    if (specimensStart < 0) {
+        throw new Error(`The CSV file is missing the ${SPECIMENS_TITLE} table.`);
     }
 
-    return idx;
+    const specimensEnd = inventoryStart > specimensStart ? inventoryStart : rows.length;
+    const inventoryEnd = inventoryStart >= 0 && inventoryStart < specimensStart ? specimensStart : rows.length;
+
+    return {
+        specimenRows: rows.slice(specimensStart + 1, specimensEnd),
+        inventoryRows: inventoryStart >= 0 ? rows.slice(inventoryStart + 1, inventoryEnd) : []
+    };
+}
+
+function getSpecimenColumnIndexes(header: string[]) {
+    const col = (name: string) => header.indexOf(name);
+
+    const missing = REQUIRED_SPECIMEN_HEADERS.filter(name => col(name) < 0);
+    if (missing.length) {
+        throw new Error(`The ${SPECIMENS_TITLE} table is missing required columns: ${missing.join(', ')}.`);
+    }
+
+    return {
+        caseId: col('Specimen ID'),
+        siteId: col('Site ID'),
+        contextId: col('Context ID'),
+        siteName: col('Site'),
+        contextName: col('Context'),
+        caseName: col('Specimen'),
+        sex: col('Sex'),
+        ageGroup: col('Age Group'),
+        fieldNotes: col('Field Notes'),
+        dateCreated: col('Date Created'),
+        dateModified: col('Date Modified')
+    };
 }
 
 export interface ParsedImport {
@@ -395,56 +406,108 @@ function buildConflicts(
 }
 
 function toParsedImport(fileText: string): ParsedImport {
-    const rows = parseCsvRow(fileText);
+    const { specimenRows, inventoryRows } = splitTables(parseCsvRow(fileText));
 
-    if (rows.length < 2) {
-        throw new Error("The CSV file has no records to import.");
+    if (specimenRows.length < 2) {
+        throw new Error("The CSV file has no specimens to import.");
     }
 
-    const header = rows[0];
-    const idx = getRequiredColumnIndexes(header);
+    const idx = getSpecimenColumnIndexes(specimenRows[0].map(name => name.trim()));
 
     const siteMap = new Map<string, SiteRecord>();
     const contextMap = new Map<string, ContextRecord>();
     const caseMap = new Map<string, CaseRecord>();
+    // When Site ID / Context ID are blank, rows with the same site/context names share one generated ID
+    const generatedSiteIds = new Map<string, string>();
+    const generatedContextIds = new Map<string, string>();
+    const labelSources: SpecimenLabelSource[] = [];
 
-    for (const row of rows.slice(1)) {
-        const siteId = row[idx.siteId];
-        const contextId = row[idx.contextId];
-        const caseId = row[idx.caseId];
-        if (!caseId) continue;
+    for (const row of specimenRows.slice(1)) {
+        const caseName = cell(row, idx.caseName);
+        if (!caseName) continue;
 
-        if (siteId && !siteMap.has(siteId)) {
-            siteMap.set(siteId, { siteId, siteName: row[idx.siteName] });
+        const caseId = cell(row, idx.caseId);
+        if (!caseId) {
+            throw new Error(`Specimen "${caseName}" is missing its Specimen ID.`);
         }
 
-        if (contextId && !contextMap.has(contextId)) {
-            contextMap.set(contextId, { contextId, contextName: row[idx.contextName], siteId });
+        const siteName = cell(row, idx.siteName);
+        const contextName = cell(row, idx.contextName);
+        if (!siteName || !contextName) {
+            throw new Error(`Specimen "${caseName}" needs both a Site and a Context.`);
         }
 
-        if (!caseMap.has(caseId)) {
-            caseMap.set(caseId, {
-                caseId,
-                caseName: row[idx.caseName],
-                dateCreated: row[idx.dateCreated],
-                dateModified: row[idx.dateModified],
-                fieldNotes: row[idx.fieldNotes],
-                sex: row[idx.sex],
-                ageGroup: row[idx.ageGroup] as CaseRecord['ageGroup'],
-                segmentStates: {},
-                contextId
-            });
+        const siteKey = normaliseName(siteName);
+        const siteId = cell(row, idx.siteId)
+            || generatedSiteIds.get(siteKey)
+            || generatedSiteIds.set(siteKey, createId()).get(siteKey)!;
+        const contextKey = `${siteId}::${normaliseName(contextName)}`;
+        const contextId = cell(row, idx.contextId)
+            || generatedContextIds.get(contextKey)
+            || generatedContextIds.set(contextKey, createId()).get(contextKey)!;
+
+        if (!siteMap.has(siteId)) {
+            siteMap.set(siteId, { siteId, siteName });
+        }
+        if (!contextMap.has(contextId)) {
+            contextMap.set(contextId, { contextId, contextName, siteId });
         }
 
-        const segmentId = row[idx.segmentId];
-        const segmentState = row[idx.segmentState] as SegmentState;
-        if (segmentId && segmentState) {
-            caseMap.get(caseId)!.segmentStates[segmentId] = segmentState;
-        }
+        labelSources.push({ caseId, caseName, siteName, contextName });
+
+        const now = new Date().toISOString();
+        caseMap.set(caseId, {
+            caseId,
+            caseName,
+            dateCreated: cell(row, idx.dateCreated) || now,
+            dateModified: cell(row, idx.dateModified) || now,
+            fieldNotes: cell(row, idx.fieldNotes),
+            sex: cell(row, idx.sex),
+            ageGroup: cell(row, idx.ageGroup) as CaseRecord['ageGroup'],
+            segmentStates: {},
+            contextId
+        });
     }
 
     if (!caseMap.size) {
-        throw new Error("The CSV file has no cases to import.");
+        throw new Error("The CSV file has no specimens to import.");
+    }
+
+    if (inventoryRows.length) {
+        const [inventoryHeader, ...boneRows] = inventoryRows;
+        if (cell(inventoryHeader, 0) !== BONE_HEADER) {
+            throw new Error(`The ${INVENTORY_TITLE} table must start with a "${BONE_HEADER}" column.`);
+        }
+
+        // Columns are headed by specimen label (see getSpecimenLabels); a bare Specimen ID is also accepted
+        const caseIdByLabel = new Map<string, string>();
+        getSpecimenLabels(labelSources).forEach((label, i) => caseIdByLabel.set(normaliseName(label), labelSources[i].caseId));
+
+        const specimenColumns = inventoryHeader.slice(1)
+            .map((value, offset) => ({ label: value.trim(), index: offset + 1 }))
+            .filter(({ label }) => label)
+            .map(({ label, index }) => {
+                const caseId = caseIdByLabel.get(normaliseName(label)) ?? (caseMap.has(label) ? label : undefined);
+                if (!caseId) {
+                    throw new Error(`The ${INVENTORY_TITLE} table has a column "${label}" that doesn't match any specimen in the ${SPECIMENS_TITLE} table.`);
+                }
+                return { caseId, index };
+            });
+
+        for (const row of boneRows) {
+            const segmentId = cell(row, 0);
+            if (!segmentId) continue;
+
+            for (const { caseId, index } of specimenColumns) {
+                const state = cell(row, index).toLowerCase();
+                if (!state) continue;
+                const caseRecord = caseMap.get(caseId)!;
+                if (!SEGMENT_STATES.includes(state as SegmentState)) {
+                    throw new Error(`"${state}" is not a valid state for ${segmentId} on specimen "${caseRecord.caseName}" (use ${SEGMENT_STATES.join(', ')}).`);
+                }
+                caseRecord.segmentStates[segmentId] = state as SegmentState;
+            }
+        }
     }
 
     return {
