@@ -7,7 +7,8 @@ import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/type
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
 import SkeletonPreview from '../components/SkeletonPreview'
-import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
+import HelpPopup from '../components/HelpPopup'
+import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, CircleHelp, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
 
 function formatDate(isoString?: string): string {
   if (!isoString) return 'Recently'
@@ -26,6 +27,7 @@ function formatDate(isoString?: string): string {
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [sites, setSites] = useState<SiteRecord[]>([])
+  const [helpOpen, setHelpOpen] = useState(false)
   const [contexts, setContexts] = useState<ContextRecord[]>([])
   const [cases, setCases] = useState<CaseRecord[]>([])
   const [siteId, setSiteId] = useState<string | null>(null)
@@ -247,7 +249,17 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 text-left">
       <header className="border-b border-slate-200/80 bg-white/90 px-4 py-3.5 shadow-xs backdrop-blur-md">
-        <div className="mx-auto max-w-5xl">
+        <div className="relative mx-auto max-w-5xl">
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="absolute right-0 top-0 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Help: install OsteoMap"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+            <span>Help</span>
+          </button>
+
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
               <Bone className="h-4.5 w-4.5" />
@@ -692,6 +704,8 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
           Import / Export
         </button>
       </div>
+
+      <HelpPopup isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Metadata
         isOpen={PopMeta}

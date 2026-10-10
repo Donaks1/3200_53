@@ -11,6 +11,10 @@
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --bone-selected: #c77dff;
+  --bone-unmarked: #e2e8f0;
+  --bone-unmarked-edge: #94a3b8;
+  --bone-expandable: #fde68a;
+  --bone-expandable-edge: #b45309;
   --paint-present: #34d399;
   --paint-present-edge: #047857;
   --paint-absent: #f87171;
@@ -265,6 +269,30 @@ input {
     text-rendering: geometricPrecision;
   }
 
+  /* Every bone and zone starts out greyed out and faded, so whatever has been
+     marked stands out in colour. :where() keeps this rule's weight at a
+     single class and element: enough to outrank each drawing's own .cls-N /
+     .st-N colours, and below every rule that follows. */
+  :where(.diagram-layer svg) :is(path, polygon, circle, ellipse) {
+    fill: var(--bone-unmarked);
+    stroke: var(--bone-unmarked-edge);
+    fill-opacity: 0.7;
+  }
+
+  /* Bones and regions that open a drawing of their own get a colour of their
+     own while unmarked: the skull, rib cage and feet always do, the scapulae,
+     hip bones and (in the spine view) vertebrae only in zone mode. The ids sit
+     in :where() so a mark inside always outranks the tint. Teeth and cartilage
+     are never recorded, so they keep the grey rather than invite a click. */
+  .skeleton-layer
+    :where(#skull, #spine_ribs, #l_foot, #r_foot)
+    :is(path, polygon, circle, ellipse):not(:where(#teeth *, [id*='cartilage'], [id*='cartilage'] *)),
+  &.zone-mode .skeleton-layer :where(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa) :is(path, polygon, circle, ellipse),
+  &.zone-mode .ribs-layer :where([data-zone-drawing]) :is(path, polygon, circle, ellipse) {
+    fill: var(--bone-expandable);
+    stroke: var(--bone-expandable-edge);
+  }
+
   /* The SVG's own .front-cls-N rules set fill and stroke on each path, so a
      group can't tint its zones by inheritance — the colour has to land on the
      shapes themselves. Two classes here beats the one-class .front-cls-N rules
@@ -301,13 +329,15 @@ input {
   .is-selected[data-paint] :is(path, polygon, circle, ellipse) {
     fill: var(--paint-fill);
     stroke: var(--paint-edge);
+    fill-opacity: 1;
   }
 
   /* A bone drawn here only whole, whose zones are marked in its own drawing
      (see summariseZones in skeletonArtwork). Zones all marked alike look like
      the bone marked that way; anything less takes the partial colour, a cue to
      open the bone and see which zones. Never set on a bone that is marked in
-     its own right, so this doesn't need to outrank the rules above. */
+     its own right, so this doesn't need to outrank the marks above, only the
+     greyed-out and openable colours (hence the extra .diagram-layer). */
   [data-zones='complete'] {
     --paint-fill: var(--paint-present);
     --paint-edge: var(--paint-present-edge);
@@ -328,11 +358,12 @@ input {
     --paint-edge: var(--paint-partial-edge);
   }
 
-  [data-zones],
-  [data-zones] :is(path, polygon, circle, ellipse) {
+  .diagram-layer [data-zones],
+  .diagram-layer [data-zones] :is(path, polygon, circle, ellipse) {
     fill: var(--paint-fill);
     stroke: var(--paint-edge);
     stroke-width: 0.9px;
+    fill-opacity: 1;
   }
 
   /* The feet are drawn at a much larger scale than the rest, so the outline
@@ -527,6 +558,18 @@ input {
     max-height: 100%;
     max-width: 100%;
     object-fit: contain;
+  }
+
+  /* Greyed out unless marked, as on the skeleton page. */
+  svg :where(path, polygon, circle, ellipse) {
+    fill: #e2e8f0;
+    stroke: #94a3b8;
+    fill-opacity: 0.7;
+  }
+
+  svg [data-preview-state],
+  svg [data-preview-state] :is(path, polygon, circle, ellipse) {
+    fill-opacity: 1 !important;
   }
 
   svg [data-preview-state='complete'],

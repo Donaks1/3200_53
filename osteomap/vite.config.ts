@@ -18,6 +18,16 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         orientation: 'portrait',
+        theme_color: '#0284c7',
+        background_color: '#ffffff',
+        // Browsers only offer to install an app whose manifest has icons of at
+        // least 192 and 512 pixels. The artwork is public/pwa-icon.svg; the
+        // icon sits well inside the edges, so it also works as a maskable icon.
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
     }),
   ],

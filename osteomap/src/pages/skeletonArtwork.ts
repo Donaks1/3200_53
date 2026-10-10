@@ -30,12 +30,34 @@ export const vertebraDrawingFor = (vertebraId: string) =>
 // skeleton previews.
 export function prepareSkeletonFront(markup: string): string {
   return withDetailSkull(
-    // In zone mode the scapula opens a drawing of its own, where l_scapula_1
-    // is one of nine zones. Here the same id names the outline of the whole
-    // bone, so it gives the id up rather than light the full scapula whenever
-    // that one zone is marked. The bone itself is still the l_scapula group.
-    markup.replace(/ id="[lr]_scapula_1"/g, ''),
+    withFirstRibsGrouped(
+      // In zone mode the scapula opens a drawing of its own, where l_scapula_1
+      // is one of nine zones. Here the same id names the outline of the whole
+      // bone, so it gives the id up rather than light the full scapula whenever
+      // that one zone is marked. The bone itself is still the l_scapula group.
+      markup.replace(/ id="[lr]_scapula_1"/g, ''),
+    ),
   )
+}
+
+// Every other rib is one shape here, but rib 1 is drawn as its three zones,
+// loose in the rib cage. The spine view groups them as the bone l_rib1 /
+// r_rib1, and so does this, so a mark on that bone lands here too.
+function withFirstRibsGrouped(markup: string): string {
+  const skeleton = new DOMParser().parseFromString(markup, 'image/svg+xml')
+
+  for (const side of ['l', 'r']) {
+    const cage = skeleton.getElementById(`${side}_ribs`)
+    const zones = cage ? [...cage.children].filter((child) => child.id.startsWith(`${side}_rib1_`)) : []
+    if (!cage || !zones.length || skeleton.getElementById(`${side}_rib1`)) continue
+
+    const rib = skeleton.createElementNS('http://www.w3.org/2000/svg', 'g')
+    rib.id = `${side}_rib1`
+    zones[0].before(rib)
+    rib.append(...zones)
+  }
+
+  return new XMLSerializer().serializeToString(skeleton.documentElement)
 }
 
 // Some drawings show a bone only whole, while its zones are recorded in a
