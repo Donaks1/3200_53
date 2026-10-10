@@ -76,7 +76,6 @@ function buildCsv(cases: CaseRecord[], contextMap: Map<string, ContextRecord>, s
         ]));
     }
 
-    // Only bones recorded on at least one exported specimen get a row
     const segmentIds = Array.from(new Set(cases.flatMap(c => Object.keys(c.segmentStates ?? {})))).sort(compareSegmentIds);
 
     rows.push('', INVENTORY_TITLE, toCsvRow([BONE_HEADER, ...getSpecimenLabels(labelSources)]));
@@ -189,12 +188,10 @@ function cell(row: string[], index: number): string {
     return (index >= 0 ? row[index] ?? '' : '').trim();
 }
 
-// A title row has the title in its first cell and nothing else (Excel may pad it with empty cells)
 function isTitleRow(row: string[], title: string): boolean {
     return cell(row, 0).toUpperCase() === title && row.slice(1).every(value => !value.trim());
 }
 
-// Splits the file into the rows of the SPECIMENS and INVENTORY tables (each starting with its header row)
 function splitTables(rows: string[][]): { specimenRows: string[][]; inventoryRows: string[][] } {
     const specimensStart = rows.findIndex(row => isTitleRow(row, SPECIMENS_TITLE));
     const inventoryStart = rows.findIndex(row => isTitleRow(row, INVENTORY_TITLE));
@@ -417,7 +414,6 @@ function toParsedImport(fileText: string): ParsedImport {
     const siteMap = new Map<string, SiteRecord>();
     const contextMap = new Map<string, ContextRecord>();
     const caseMap = new Map<string, CaseRecord>();
-    // When Site ID / Context ID are blank, rows with the same site/context names share one generated ID
     const generatedSiteIds = new Map<string, string>();
     const generatedContextIds = new Map<string, string>();
     const labelSources: SpecimenLabelSource[] = [];
@@ -479,7 +475,6 @@ function toParsedImport(fileText: string): ParsedImport {
             throw new Error(`The ${INVENTORY_TITLE} table must start with a "${BONE_HEADER}" column.`);
         }
 
-        // Columns are headed by specimen label (see getSpecimenLabels); a bare Specimen ID is also accepted
         const caseIdByLabel = new Map<string, string>();
         getSpecimenLabels(labelSources).forEach((label, i) => caseIdByLabel.set(normaliseName(label), labelSources[i].caseId));
 

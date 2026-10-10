@@ -23,7 +23,6 @@ function makeCase(overrides: Partial<CaseRecord>): CaseRecord {
 
 const DEFAULT_HEADER = 'Site,Context,Specimen,Sex,Age Group,Field Notes,Date Created,Date Modified,Site ID,Context ID,Specimen ID'
 
-// Builds a two-table file: the SPECIMENS table and, when given, the INVENTORY table
 function csvBlob(rows: string[], header = DEFAULT_HEADER, inventory: string[] = []): Blob {
   const lines = ['SPECIMENS', header, ...rows]
   if (inventory.length) lines.push('', 'INVENTORY', ...inventory)
