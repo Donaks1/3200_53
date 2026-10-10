@@ -17,6 +17,8 @@ test('create a site, context and specimen, and it is still there after reload', 
   await page.getByLabel('Specimen sex').selectOption('male')
   await page.getByLabel('Specimen age group').selectOption('adult')
   await page.getByRole('button', { name: 'Save metadata' }).click()
+  // The specimen only shows up once it has been written, so wait for it before reloading
+  await expect(page.getByRole('button', { name: 'SK-001' })).toBeVisible()
 
   // Data is saved on the device, so it should survive a reload
   await page.reload()
