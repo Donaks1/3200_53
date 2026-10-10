@@ -17,7 +17,6 @@ import {
   Layers, 
   Plus, 
   ChevronRight,
-  Sparkles,
   Pencil,
   X,
   Check
@@ -384,8 +383,7 @@ function MySkeletons({ onNavigate }: MySkeletonsProps) {
                           {item.sex}
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                        <Sparkles className="h-3 w-3" />
+                      <span className="inline-flex items-center rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                         {item.zonesCount} recorded
                       </span>
                     </div>

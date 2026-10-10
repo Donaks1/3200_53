@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import panzoom from '@panzoom/panzoom'
 import type { NavigateFn } from './types'
 import skeletonFrontSource from '../assets/skeleton_front.svg?raw'
@@ -11,11 +11,26 @@ import leftFootSource from '../assets/left_foot.svg?raw'
 import rightFootSource from '../assets/right_foot.svg?raw'
 import scapulaLeftSource from '../assets/scapula_left.svg?raw'
 import scapulaRightSource from '../assets/scapula_right.svg?raw'
+import leftHipSource from '../assets/left_pelvis.svg?raw'
+import rightHipSource from '../assets/right_pelvis.svg?raw'
 import type { CaseRecord, SegmentState } from '../db/types'
-import { ArrowLeft, ArrowRight, Bone, CheckCheck, Eye, FlipHorizontal, List, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bone, CheckCheck, Eye, FlipHorizontal, List, Palette, Redo2, RotateCcw, ScanFace, Search, Share2, SlidersHorizontal, StickyNote, Undo2, X } from 'lucide-react'
 import { getCase, setAllSegmentStates, updateCaseMetadata } from '../db/caseOperation'
 import NotesPopup from '../components/NotesPopup'
-import { prepareSkeletonFront, summariseZones, vertebraDrawingFor, zoneStandIns } from './skeletonArtwork'
+import InfoPopup from '../components/InfoPopup'
+import { VERTEBRA_DRAWINGS, prepareSkeletonFront, summariseZones, vertebraDrawingFor, zoneStandIns } from './skeletonArtwork'
+import {
+  coveringState,
+  hierarchyOf,
+  isUnrecorded,
+  isUnrecordedId,
+  markedElements,
+  normalisedStates,
+  topLevelIds,
+  withMark,
+  zonePosition,
+  type Hierarchy,
+} from './segmentMarks'
 
 
 
@@ -71,8 +86,8 @@ function gatherInto(svg: Element, id: string) {
   svg.append(group)
 }
 
-// Readied so marks made in the skull, scapula and pelvis drawings land on it
-// too (see skeletonArtwork).
+// Readied so marks made in the skull and scapula drawings land on it too (see
+// skeletonArtwork).
 const skeletonFront = prepareSkeletonFront(scopeSvg(skeletonFrontSource, 'front'))
 
 const skeletonBack = scopeSvg(skeletonBackSource, 'back')
@@ -144,9 +159,11 @@ const ribsSpineFront = groupRibsAndVertebrae(ribsSpineNormalised)
 const leftFoot = editSvg(scopeSvg(leftFootSource, 'left-foot'), (svg) => gatherInto(svg, 'l_foot'))
 const rightFoot = editSvg(scopeSvg(rightFootSource, 'right-foot'), (svg) => gatherInto(svg, 'r_foot'))
 
-// The scapula is a single bone drawn as nine loose zones.
+// The scapula and the hip bone (os coxa) are each a single bone drawn as loose zones.
 const scapulaLeft = editSvg(scopeSvg(scapulaLeftSource, 'scapula-left'), (svg) => gatherInto(svg, 'l_scapula'))
 const scapulaRight = editSvg(scopeSvg(scapulaRightSource, 'scapula-right'), (svg) => gatherInto(svg, 'r_scapula'))
+const leftHip = editSvg(scopeSvg(leftHipSource, 'hip-left'), (svg) => gatherInto(svg, 'l_oscoxa'))
+const rightHip = editSvg(scopeSvg(rightHipSource, 'hip-right'), (svg) => gatherInto(svg, 'r_oscoxa'))
 
 // Hoisted so the prop keeps the same object identity across renders. React 19
 // compares dangerouslySetInnerHTML by reference, so an inline literal would
@@ -162,6 +179,8 @@ const leftFootMarkup = { __html: leftFoot }
 const rightFootMarkup = { __html: rightFoot }
 const scapulaLeftMarkup = { __html: scapulaLeft }
 const scapulaRightMarkup = { __html: scapulaRight }
+const leftHipMarkup = { __html: leftHip }
+const rightHipMarkup = { __html: rightHip }
 const noMarkup = { __html: '' }
 
 // Built on first use and kept for the same reason as the markup above.
@@ -180,6 +199,33 @@ function vertebraMarkup(vertebraId: string | null): { __html: string } {
   return markup
 }
 
+// Where every id sits among the others, across all the drawings at once (see
+// segmentMarks). Built on first use, as it reads every drawing.
+let segmentHierarchy: Hierarchy | null = null
+
+function hierarchy(): Hierarchy {
+  segmentHierarchy ??= hierarchyOf([
+    { markup: skeletonFront },
+    { markup: skeletonBack },
+    // The skull views draw nothing but the skull, and the spine view nothing
+    // but the rib cage, so neither names the whole it is drawing.
+    { markup: skullFront, within: 'skull' },
+    { markup: skullLeft, within: 'skull' },
+    { markup: skullRight, within: 'skull' },
+    { markup: ribsSpineFront, within: 'spine_ribs' },
+    { markup: leftFoot },
+    { markup: rightFoot },
+    { markup: scapulaLeft },
+    { markup: scapulaRight },
+    { markup: leftHip },
+    { markup: rightHip },
+    ...VERTEBRA_DRAWINGS.flatMap(({ count, prefix }) =>
+      Array.from({ length: count }, (_, index) => ({ markup: vertebraMarkup(`${prefix}${index + 1}`).__html })),
+    ),
+  ])
+  return segmentHierarchy
+}
+
 type ActiveView =
   | 'skeleton'
   | 'skeleton-back'
@@ -191,12 +237,26 @@ type ActiveView =
   | 'foot-right'
   | 'scapula-left'
   | 'scapula-right'
+  | 'hip-left'
+  | 'hip-right'
   | 'vertebra'
 
 // Which detail drawing a zoom lands on, which is also the layer that holds it.
 // Held separately from the view because the animation runs while the view is
 // still the one being zoomed in from.
-type DetailTarget = 'skull' | 'ribs' | 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula' | 'vertebra'
+type DetailTarget =
+  | 'skull'
+  | 'ribs'
+  | 'l_foot'
+  | 'r_foot'
+  | 'l_scapula'
+  | 'r_scapula'
+  | 'l_oscoxa'
+  | 'r_oscoxa'
+  | 'vertebra'
+
+// Paired bones whose sides are both open at once in the detail view.
+type PairedTarget = 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula' | 'l_oscoxa' | 'r_oscoxa'
 
 // The view each zoom settles on.
 const DETAIL_VIEW: Record<DetailTarget, ActiveView> = {
@@ -206,6 +266,8 @@ const DETAIL_VIEW: Record<DetailTarget, ActiveView> = {
   r_foot: 'foot-right',
   l_scapula: 'scapula-left',
   r_scapula: 'scapula-right',
+  l_oscoxa: 'hip-left',
+  r_oscoxa: 'hip-right',
   vertebra: 'vertebra',
 }
 
@@ -216,6 +278,8 @@ const DETAIL_LAYER: Record<DetailTarget, string> = {
   r_foot: 'right-foot-layer',
   l_scapula: 'left-scapula-layer',
   r_scapula: 'right-scapula-layer',
+  l_oscoxa: 'left-hip-layer',
+  r_oscoxa: 'right-hip-layer',
   vertebra: 'vertebra-layer',
 }
 
@@ -229,6 +293,8 @@ const DETAIL_REGION: Record<Exclude<DetailTarget, 'vertebra'>, string> = {
   r_foot: '#r_foot',
   l_scapula: '#l_scapula',
   r_scapula: '#r_scapula',
+  l_oscoxa: '#l_oscoxa',
+  r_oscoxa: '#r_oscoxa',
 }
 
 function detailTargetOf(view: ActiveView): DetailTarget | null {
@@ -256,6 +322,10 @@ function rawSvgFor(view: ActiveView, vertebraId: string | null): string {
       return scapulaLeft
     case 'scapula-right':
       return scapulaRight
+    case 'hip-left':
+      return leftHip
+    case 'hip-right':
+      return rightHip
     case 'vertebra':
       return vertebraMarkup(vertebraId).__html
     case 'skeleton-back':
@@ -271,21 +341,25 @@ function rawSvgFor(view: ActiveView, vertebraId: string | null): string {
 function viewTitle(view: ActiveView, vertebraId: string | null): string {
   switch (view) {
     case 'skull-front':
-      return 'Skull — Anterior View'
+      return 'Skull — Anterior (Front) View'
     case 'skull-left':
       return 'Skull — Left Lateral View'
     case 'skull-right':
       return 'Skull — Right Lateral View'
     case 'ribs-front':
-      return 'Spine & Ribs — Anterior View'
+      return 'Spine & Ribs — Anterior (Front) View'
     case 'foot-left':
       return 'Left Foot — Dorsal View'
     case 'foot-right':
       return 'Right Foot — Dorsal View'
     case 'scapula-left':
-      return 'Left Scapula'
+      return 'Left Scapula — Anterior (Front) View'
     case 'scapula-right':
-      return 'Right Scapula'
+      return 'Right Scapula — Anterior (Front) View'
+    case 'hip-left':
+      return 'Left Hip Bone — Anterior (Front) View'
+    case 'hip-right':
+      return 'Right Hip Bone — Anterior (Front) View'
     case 'vertebra': {
       const drawing = vertebraId ? vertebraDrawingFor(vertebraId) : undefined
       return drawing && vertebraId
@@ -310,6 +384,26 @@ const PAINT_OPTIONS: { state: PaintState; label: string; swatch: string }[] = [
   { state: 'fragmentary', label: 'Fragmentary', swatch: 'bg-blue-500' },
 ]
 
+// What each colour on the drawings means, for the colour key. The colours are
+// the same tokens the drawings are painted with (see index.css).
+const COLOUR_KEY = [
+  { name: 'Present', colour: 'var(--paint-present)', meaning: 'Marked as present.' },
+  { name: 'Absent', colour: 'var(--paint-absent)', meaning: 'Marked as absent.' },
+  { name: 'Fragmentary', colour: 'var(--paint-fragmentary)', meaning: 'Marked as fragmentary.' },
+  {
+    name: 'Partly recorded',
+    colour: 'var(--paint-partial)',
+    meaning: "Only some of the bone's zones are marked. Open the bone to see which.",
+  },
+  {
+    name: 'Opens a detailed drawing',
+    colour: 'var(--bone-expandable)',
+    meaning:
+      'Tap to zoom in. The skull, spine & ribs and feet always open; the scapulae, hip bones and vertebrae open in zone mode.',
+  },
+  { name: 'Not marked yet', colour: 'var(--bone-unmarked)', meaning: 'Nothing recorded for this bone or zone.' },
+]
+
 const paintLabel = (paint: PaintState) =>
   PAINT_OPTIONS.find((option) => option.state === paint)?.label ?? paint
 
@@ -327,20 +421,13 @@ const PAINT_STATE_BY_SEGMENT: Partial<Record<SegmentState, PaintState>> = {
   fragmentary: 'fragmentary',
 }
 
-
-// A marked segment and the colour it was marked with.
-type PaintedSegment = { element: Element; paint: PaintState }
-
-// Teeth are drawn so the skull reads as a skull, but they aren't recorded:
-// they can't be selected in either mode, searched for or marked in bulk.
-const isTooth = (element: Element) => element.closest('#teeth') !== null
-
 // A bone is a <g> and its zones are the shapes drawn inside it. Groups are never
 // painted and so can never be the click target themselves — the click always
 // lands on a zone shape, which makes both modes fall out of the same event:
-// keep the target for a zone, or step out to the first enclosing group for a
-// bone. Depth doesn't matter, so l_femur > path and
-// l_hand > l_pollex > l_dist_pollex > path both resolve correctly.
+// keep the target for a zone, or step out to the first enclosing named group
+// for a bone. Depth doesn't matter, so l_femur > path and
+// l_hand > l_pollex > l_dist_pollex > path both resolve correctly. A shape with
+// no id of its own can't be recorded, so in zone mode it stands for its bone.
 function selectionAt(
   target: Element,
   svg: SVGSVGElement,
@@ -348,13 +435,9 @@ function selectionAt(
 ): Element | null {
   // Landing outside the drawing, or on the root, means the click missed the skeleton.
   if (!svg.contains(target) || target === svg) return null
-  if (isTooth(target)) return null
-  return mode === 'zone' ? target : target.closest('g')
+  if (isUnrecorded(target)) return null
+  return mode === 'zone' && target.id ? target : target.closest('g[id]')
 }
-
-// The bone a selection belongs to. closest() counts the element itself, so this
-// returns the group unchanged in bone mode and its parent group in zone mode.
-const boneOf = (selected: Element) => selected.closest('g')
 
 // l_femur -> "Left femur", r_iv-2 -> "Right iv 2".
 // This part is literally just to generate full bone name from abbreviation.
@@ -363,170 +446,15 @@ function boneLabel(id: string) {
     .replace(/^l_/, 'left_')
     .replace(/^r_/, 'right_')
     .replace(/rib(\d)/, 'rib $1')
+    .replace('oscoxa', 'os coxa')
     .replaceAll(/[_-]/g, ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-function selectionLabel(selected: Element) {
-  const bone = boneOf(selected)
-  // A shape with no group around it isn't a finished bone yet, so all we can
-  // report is whatever it happens to be called.
-  if (!bone) return boneLabel(selected.id) || 'Ungrouped shape'
-
-  const name = boneLabel(bone.id) || 'Unnamed bone'
-  if (selected === bone) return name
-  // Zone shapes don't need names of their own, so identify them by position.
-  const index = [...bone.children].indexOf(selected) + 1
-  return `${name} — zone ${index} of ${bone.children.length}`
-}
-
-// Switching modes keeps whatever is already painted, so the list holds a mix of
-// bone groups and lone zone shapes. A group entry stands for every zone inside
-// it, which is what makes these three helpers more than array operations: they
-// keep exactly one entry per painted shape no matter which mode applied it.
-
-// contains() counts the element itself, so this answers both "is it painted"
-// and "is its bone painted", and returns the colour it is wearing either way.
-// In bone mode, if child zones are painted, checking descendants allows bone mode
-// to detect painted zones and de-select or recolor appropriately.
-function paintOf(
-  selected: PaintedSegment[],
-  element: Element,
-  activePaint?: PaintState,
-): PaintState | null {
-  const ancestorOrSelf = selected.find((entry) => entry.element.contains(element))
-  if (ancestorOrSelf) return ancestorOrSelf.paint
-
-  const childEntries = selected.filter(
-    (entry) => element.contains(entry.element) && entry.element !== element,
-  )
-  if (childEntries.length > 0) {
-    if (activePaint && childEntries.some((entry) => entry.paint === activePaint)) {
-      return activePaint
-    }
-    return childEntries[0].paint
-  }
-  return null
-}
-
-// Painting a whole bone subsumes any of its zones already in the list. Callers
-// clear the element first, so whatever covered it has already been dealt with.
-function withPaint(
-  selected: PaintedSegment[],
-  element: Element,
-  paint: PaintState,
-): PaintedSegment[] {
-  return [...selected.filter((entry) => !element.contains(entry.element)), { element, paint }]
-}
-
-// Clearing one zone is the hard direction: if its bone is in the list as a
-// single entry, that entry has to break apart into everything under it except
-// the shape being cleared, with the siblings keeping the colour they inherited.
-// Walking up from the shape to the entry and keeping the siblings passed on the
-// way does that at any depth, so carving a zone out of
-// l_hand > l_pollex > l_dist_pollex works the same as out of l_femur.
-function withoutPaint(selected: PaintedSegment[], element: Element): PaintedSegment[] {
-  return selected.flatMap((entry) => {
-    if (entry.element === element) return []
-    // If entry is inside element (e.g. element is a bone group and entry is a child zone),
-    // clearing the whole bone clears all child zones inside it.
-    if (element.contains(entry.element)) return []
-    if (!entry.element.contains(element)) return [entry]
-
-    const remainder: PaintedSegment[] = []
-    let node: Element = element
-    while (node !== entry.element) {
-      const parent: Element | null = node.parentElement
-      if (!parent) break
-      for (const child of parent.children) {
-        if (child !== node) remainder.push({ element: child, paint: entry.paint })
-      }
-      node = parent
-    }
-    return remainder
-  })
-}
-
-// Computes atomic updates to segmentStates in IndexedDB and caseData when selecting or
-// de-selecting bones or individual zones.
-// - Selecting/erasing a whole bone subsumes/clears all of its descendant zones.
-// - Selecting/erasing a child zone breaks any stored ancestor bone into all other sibling zones,
-//   preserving their paint state while isolating the target zone.
-function computeUpdatedSegmentStates(
-  currentStates: Record<string, SegmentState>,
-  target: Element,
-  svg: SVGSVGElement,
-  newState: SegmentState | null,
-  rootContainer?: HTMLElement | null,
-): Record<string, SegmentState> {
-  const next = { ...currentStates }
-
-  // 1. Gather all descendant element IDs (child zones/subshapes)
-  const descendantIds: string[] = []
-  target.querySelectorAll('[id]').forEach((child) => {
-    if (child.id && child.id !== target.id) {
-      descendantIds.push(child.id)
-    }
-  })
-
-  // 2. Gather ancestor bone group IDs up to the SVG root (excluding view wrappers and teeth containers)
-  const ancestorBoneIds: string[] = []
-  let curr: Element | null = target.parentElement
-  while (curr && curr !== (svg as Element) && curr.tagName.toLowerCase() !== 'svg') {
-    if (
-      curr.id &&
-      curr.tagName.toLowerCase() === 'g' &&
-      curr.id !== 'skull' &&
-      curr.id !== 'teeth' &&
-      curr.id !== 'teeth_upper' &&
-      curr.id !== 'teeth_lower'
-    ) {
-      ancestorBoneIds.push(curr.id)
-    }
-    curr = curr.parentElement
-  }
-
-  // 3. If any ancestor bone is currently stored in states, break it apart into sibling zones
-  for (const ancestorId of ancestorBoneIds) {
-    if (ancestorId in next) {
-      const parentState = next[ancestorId]
-      delete next[ancestorId]
-
-      // Query parent group instances across mounted SVGs to find all sibling zones
-      const parentElements = rootContainer
-        ? Array.from(rootContainer.querySelectorAll<SVGElement>(`#${CSS.escape(ancestorId)}`))
-        : Array.from(svg.querySelectorAll<SVGElement>(`#${CSS.escape(ancestorId)}`))
-
-      for (const parentEl of parentElements) {
-        parentEl.querySelectorAll('[id]').forEach((child) => {
-          if (
-            child.id &&
-            child.id !== target.id &&
-            child.id !== ancestorId &&
-            !target.contains(child) &&
-            child.tagName.toLowerCase() !== 'g'
-          ) {
-            next[child.id] = parentState
-          }
-        })
-      }
-    }
-  }
-
-  // 4. Update target and clean up descendants
-  if (newState === null) {
-    if (target.id) delete next[target.id]
-    for (const descId of descendantIds) {
-      delete next[descId]
-    }
-  } else {
-    if (target.id) next[target.id] = newState
-    for (const descId of descendantIds) {
-      delete next[descId]
-    }
-  }
-
-  return next
+// Zones don't need names of their own, so they are named by position in their bone.
+function recordLabel(id: string) {
+  const zone = zonePosition(hierarchy(), id)
+  return zone ? `${boneLabel(zone.bone)} — zone ${zone.index} of ${zone.count}` : boneLabel(id)
 }
 
 type SearchOption = {
@@ -539,7 +467,7 @@ function searchOptionsFromSvg(markup: string, mode: SelectionMode): SearchOption
 
   return [...document.querySelectorAll<SVGElement>('[id]')]
     .filter((element) => {
-      if (isTooth(element)) return false
+      if (isUnrecorded(element)) return false
       const isGroup = element.tagName.toLowerCase() === 'g'
       return mode === 'bone' ? isGroup : !isGroup && element.closest('g') !== null
     })
@@ -734,16 +662,19 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   // The vertebra whose drawing is open or opening, by id. The one drawing for
   // its type is relabelled to it, so this decides whose zones are on screen.
   const [openVertebraId, setOpenVertebraId] = useState<string | null>(null)
+  // Whether the detail in play was opened from the back of the skeleton, which
+  // is then the view a zoom flies through and returns to.
+  const [zoomedFromBack, setZoomedFromBack] = useState(false)
   // Where the zoom in flight is headed, measured as it starts (see zoomStyle).
   const [zoomFrame, setZoomFrame] = useState<React.CSSProperties>({})
   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle')
-  const [selected, setSelected] = useState<PaintedSegment[]>([])
-  // These 2 lnes below are variable for the undo/redo button. 
-  const [undoStack, setUndoStack] = useState<PaintedSegment[][]>([])
-  const [redoStack, setRedoStack] = useState<PaintedSegment[][]>([])
+  // The record as it stood before each change still undoable, and after each one undone.
+  const [undoStack, setUndoStack] = useState<Record<string, SegmentState>[]>([])
+  const [redoStack, setRedoStack] = useState<Record<string, SegmentState>[]>([])
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [activePaint, setActivePaint] = useState<PaintState>('present')
   const [notesOpen, setNotesOpen] = useState(false)
+  const [keyOpen, setKeyOpen] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -755,11 +686,6 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const isDragging = useRef(false)
   const panzoomRef = useRef<ReturnType<typeof panzoom> | null>(null)
   const ribsFramedRef = useRef(false)
-  const restoredViewRef = useRef<{
-    caseId: string
-    activeView: ActiveView
-    vertebraId: string | null
-  } | null>(null)
 
 
   const currentRawSvg = useMemo(() => rawSvgFor(activeView, openVertebraId), [activeView, openVertebraId])
@@ -773,8 +699,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     transitionPhase === 'zooming-out'
   const isFlipping = transitionPhase === 'flipping-to-back' || transitionPhase === 'flipping-to-front'
   // A vertebra is zoomed into from the rib cage; everything else from the
-  // full skeleton.
-  const zoomSource = detailTarget === 'vertebra' ? 'ribs' : 'skeleton'
+  // full skeleton, front or back, whichever it was opened from.
+  const zoomSource =
+    detailTarget === 'vertebra' ? 'ribs' : zoomedFromBack ? 'skeleton-back' : 'skeleton'
 
   // Which view's sub-bar is on screen. The one being left slides out as a zoom
   // starts and the one being zoomed into slides in as its drawing fades in, or
@@ -785,7 +712,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
       : transitionPhase === 'fading-in'
         ? DETAIL_VIEW[detailTarget]
         : transitionPhase === 'zooming-out'
-          ? (zoomSource === 'ribs' ? 'ribs-front' : 'skeleton')
+          ? (zoomSource === 'ribs' ? 'ribs-front' : zoomSource)
           : activeView
   const subBarTarget = subBarView ? detailTargetOf(subBarView) : null
   const isSkeletonBarVisible = subBarView === 'skeleton' || subBarView === 'skeleton-back'
@@ -793,14 +720,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const isRibsBarVisible = subBarTarget === 'ribs'
   const isFootBarVisible = subBarTarget === 'l_foot' || subBarTarget === 'r_foot'
   const isScapulaBarVisible = subBarTarget === 'l_scapula' || subBarTarget === 'r_scapula'
+  const isHipBarVisible = subBarTarget === 'l_oscoxa' || subBarTarget === 'r_oscoxa'
   const isVertebraBarVisible = subBarTarget === 'vertebra'
 
-  // The same segment is often drawn in more than one view at once (a skull zone
-  // in the skull view and the full skeleton, a rib in the spine view and the
-  // full skeleton), so it is counted once however many drawings show it.
-  const markedSegments = [
-    ...new Map(selected.map((entry) => [entry.element.id || entry.element, entry])).values(),
-  ]
+  const segmentStates = caseData?.segmentStates
+  // What the record holds, counted once however many drawings show each mark.
+  const recordedIds = Object.keys(segmentStates ?? {}).filter((id) => !isUnrecordedId(id))
 
   // The title over a zoomed-in drawing names what it shows. It switches to the
   // drawing being zoomed into as that fades in, and keeps its text while it
@@ -819,66 +744,21 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     })
     .slice(0, 50)
 
-  // Load the case record on mount.
+  // Load the case record on mount. Changes made to another case can't be undone here.
   useEffect(() => {
     let active = true
 
     getCase(caseId).then((data) => {
-      if (active) setCaseData(data ?? null)
+      if (!active) return
+      setCaseData(data ? { ...data, segmentStates: normalisedStates(hierarchy(), data.segmentStates ?? {}) } : null)
+      setUndoStack([])
+      setRedoStack([])
     })
 
     return () => {
       active = false
     }
   }, [caseId])
-
-  // Repaint the saved segments once the record and the SVG are both available,
-  // and again whenever the view settles somewhere new. A vertebra's drawing is
-  // only mounted as it opens, so it is repainted straight away rather than
-  // waiting for the zoom to finish, and fades in already marked.
-  useEffect(() => {
-    if (!caseData?.segmentStates) return
-    if (transitionPhase !== 'idle' && detailTarget !== 'vertebra') return
-
-    const restoreKey = { caseId: caseData.caseId, activeView, vertebraId: openVertebraId }
-    const previousRestore = restoredViewRef.current
-    if (
-      previousRestore?.caseId === restoreKey.caseId &&
-      previousRestore.activeView === restoreKey.activeView &&
-      previousRestore.vertebraId === restoreKey.vertebraId
-    ) {
-      return
-    }
-
-    const svgs = diagramRef.current?.querySelectorAll<SVGSVGElement>('.diagram-layer svg') ?? []
-    if (!svgs.length) return
-
-    const restored = Array.from(svgs).flatMap((svg) =>
-      Object.entries(caseData.segmentStates).flatMap(([segmentId, state]) => {
-        const paint = state ? PAINT_STATE_BY_SEGMENT[state] : undefined
-        // A state with no colour of its own isn't drawable, so it's skipped
-        // rather than guessed at.
-        if (!paint) return []
-
-        try {
-          const element = svg.querySelector(`#${CSS.escape(segmentId)}`)
-          // Records from before teeth stopped being recordable may still name
-          // them, and a tooth painted now could never be cleared again.
-          return element && !isTooth(element) ? [{ element, paint }] : []
-        } catch (e) {
-          console.warn(`Could not select segment #${segmentId}:`, e)
-          return []
-        }
-      })
-    )
-
-    setSelected(restored)
-    if (previousRestore && previousRestore.caseId !== restoreKey.caseId) {
-      setUndoStack([])
-      setRedoStack([])
-    }
-    restoredViewRef.current = restoreKey
-  }, [caseData, activeView, transitionPhase, detailTarget, openVertebraId])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -1005,46 +885,61 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     ribsFramedRef.current = true
   }, [isRibsView, detailTarget])
 
-  // The CSS cascades the highlight from a group down onto its shapes, so the
-  // class and the colour only ever need to go on the selection itself.
-  useEffect(() => {
-    selected.forEach((entry) => {
-      entry.element.classList.add('is-selected')
-      entry.element.setAttribute('data-paint', entry.paint)
-    })
-    return () =>
-      selected.forEach((entry) => {
-        entry.element.classList.remove('is-selected')
-        entry.element.removeAttribute('data-paint')
-      })
-  }, [selected])
-
-  // Where a bone is drawn only whole (a foot or scapula on the full skeleton,
-  // a vertebra in the spine view), marks on its zones made in its own drawing
-  // would otherwise leave no trace. Those drawings show what the zones add up
-  // to instead (see summariseZones), unless the bone is marked in its own right.
-  useEffect(() => {
+  // Paints every drawing on the page from the record, so a mark shows the same
+  // in every drawing of what it covers, however it was made. The CSS cascades
+  // the colour from a group down onto its shapes, so it only ever needs to go on
+  // the marked element itself. It runs before the browser paints, and again
+  // whenever a drawing is swapped for another (a skull side, a vertebra), so
+  // nothing shows unmarked for a frame.
+  //
+  // Where a bone is drawn only whole (a foot, scapula or hip bone on the full
+  // skeleton, a vertebra in the spine view), marks on its zones made in its own
+  // drawing would otherwise leave no trace. Those drawings show what the zones
+  // add up to instead (see summariseZones), unless the bone is marked itself.
+  useLayoutEffect(() => {
     const diagram = diagramRef.current
-    if (!diagram || !caseData?.segmentStates) return
+    if (!diagram || !segmentStates) return
+
+    const marked = [...diagram.querySelectorAll('.diagram-layer svg')].flatMap((svg) =>
+      markedElements(hierarchy(), svg, segmentStates),
+    )
+    for (const { element, state } of marked) {
+      const paint = PAINT_STATE_BY_SEGMENT[state]
+      if (!paint) continue
+      element.classList.add('is-selected')
+      element.setAttribute('data-paint', paint)
+    }
 
     const summarised: Element[] = []
-    for (const [boneId, summary] of summariseZones(caseData.segmentStates)) {
+    for (const [boneId, summary] of summariseZones(segmentStates)) {
       for (const element of zoneStandIns(diagram, boneId)) {
-        if (selected.some((entry) => entry.element.contains(element))) continue
+        if (marked.some((entry) => entry.element.contains(element))) continue
         element.setAttribute('data-zones', summary)
         summarised.push(element)
       }
     }
-    return () => summarised.forEach((element) => element.removeAttribute('data-zones'))
-  }, [caseData, selected])
+
+    return () => {
+      for (const { element } of marked) {
+        element.classList.remove('is-selected')
+        element.removeAttribute('data-paint')
+      }
+      summarised.forEach((element) => element.removeAttribute('data-zones'))
+    }
+  }, [segmentStates, activeView, openVertebraId])
 
   // Measures the zoom between a detail drawing, as `view` shows it, and the
-  // drawing it is opened from: the rib cage for a vertebra, and the full
-  // skeleton for everything else.
-  function measureZoom(target: DetailTarget, view: ActiveView, vertebraId: string | null): React.CSSProperties {
+  // drawing it is opened from: the rib cage for a vertebra, and the front or
+  // back of the full skeleton for everything else.
+  function measureZoom(
+    target: DetailTarget,
+    view: ActiveView,
+    vertebraId: string | null,
+    fromBack: boolean,
+  ): React.CSSProperties {
     const diagram = diagramRef.current
     const svg = diagram?.querySelector<SVGSVGElement>(
-      target === 'vertebra' ? '.ribs-layer svg' : '.skeleton-front-layer svg',
+      target === 'vertebra' ? '.ribs-layer svg' : fromBack ? '.skeleton-back-layer svg' : '.skeleton-front-layer svg',
     )
     const landing = diagram?.querySelector<HTMLElement>(`.${DETAIL_LAYER[target]}`)
     const regionSelector =
@@ -1066,7 +961,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   function zoomToDetail(target: DetailTarget, vertebraId: string | null = null) {
     if (transitionPhase !== 'idle') return
 
-    setZoomFrame(measureZoom(target, DETAIL_VIEW[target], vertebraId))
+    // A vertebra opens from the rib cage, which keeps the side it was opened from.
+    const fromBack = target === 'vertebra' ? zoomedFromBack : activeView === 'skeleton-back'
+    setZoomedFromBack(fromBack)
+    setZoomFrame(measureZoom(target, DETAIL_VIEW[target], vertebraId, fromBack))
     setDetailTarget(target)
 
     // Step 1: Smoothly zoom into the region while keeping the outer drawing 100% visible
@@ -1097,14 +995,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     if (transitionPhase !== 'idle') return
 
     const toRibs = detailTarget === 'vertebra'
-    setZoomFrame(measureZoom(detailTarget, activeView, openVertebraId))
+    setZoomFrame(measureZoom(detailTarget, activeView, openVertebraId, zoomedFromBack))
 
     // Immediately hide the detail layer and start zooming out the outer drawing and retracting toolbar simultaneously
     setTransitionPhase('zooming-out')
 
     // Settle back on the outer view once animations complete (500ms)
     setTimeout(() => {
-      setActiveView(toRibs ? 'ribs-front' : 'skeleton')
+      setActiveView(toRibs ? 'ribs-front' : zoomedFromBack ? 'skeleton-back' : 'skeleton')
       if (toRibs) setDetailTarget('ribs')
       setTransitionPhase('idle')
     }, 500)
@@ -1112,7 +1010,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
   // Both sides of a paired bone are always mounted, so moving between them
   // inside the detail view is only a matter of which one shows.
-  function showSide(target: 'l_foot' | 'r_foot' | 'l_scapula' | 'r_scapula') {
+  function showSide(target: PairedTarget) {
     if (transitionPhase !== 'idle') return
     setDetailTarget(target)
     setActiveView(DETAIL_VIEW[target])
@@ -1174,12 +1072,9 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 }
 
 
-  // Marks build up: each click paints another segment in the active colour, and
-  // clicking one that already wears that colour wipes it, so the same button
-  // both paints and erases. Clicking it in a different colour repaints instead.
   // A click that misses the skeleton is left alone — panning the diagram
   // shouldn't wipe out everything marked so far.
-  async function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
+  function handleDiagramClick(event: React.MouseEvent<HTMLDivElement>) {
     if (transitionPhase !== 'idle') return
     if (isDragging.current) return
 
@@ -1189,9 +1084,11 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
 
     const rawTarget = event.target as Element
 
-    // Clicking the skull, the rib cage or a foot in the anterior skeleton view
+    // Clicking the skull, the rib cage or a foot in either skeleton view
     // triggers the smooth zoom into that detail drawing rather than painting it.
-    if (activeView === 'skeleton') {
+    // The back opens the same drawings as the front; their titles say which
+    // side each one is drawn from.
+    if (activeView === 'skeleton' || activeView === 'skeleton-back') {
       if (rawTarget.closest('#skull')) {
         zoomToDetail('skull')
         return
@@ -1205,18 +1102,19 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         zoomToDetail(foot.id === 'l_foot' ? 'l_foot' : 'r_foot')
         return
       }
-      // A scapula is a single bone, so bone mode marks it from here like any
-      // other. Only its zones need the drawing of its own.
-      const scapula = selectionMode === 'zone' ? rawTarget.closest('#l_scapula, #r_scapula') : null
-      if (scapula) {
-        zoomToDetail(scapula.id === 'l_scapula' ? 'l_scapula' : 'r_scapula')
+      // A scapula or hip bone is a single bone, so bone mode marks it from here
+      // like any other. Only its zones need the drawing of its own.
+      const single =
+        selectionMode === 'zone' ? rawTarget.closest('#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa') : null
+      if (single) {
+        zoomToDetail(single.id as PairedTarget)
         return
       }
     }
 
     // The same rule one level down: in zone mode a vertebra opens the drawing
     // of its type, relabelled to it, so its own zones can be reached. In bone
-    // mode it is marked where it is, like the ribs and cartilage around it.
+    // mode it is marked where it is, like the ribs around it.
     if (isRibsView && selectionMode === 'zone') {
       const vertebra = rawTarget.closest('[data-zone-drawing]')
       if (vertebra) {
@@ -1226,150 +1124,61 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     }
 
     const target = selectionAt(rawTarget, svg, selectionMode)
-    if (!target) return
+    if (target) markSegment(target.id)
+  }
 
-    // Clearing first is what lets a zone be repainted out of a whole bone: the
-    // bone splits into its other zones, then this one goes back in on its own.
-    const covering = paintOf(selected, target, activePaint)
-    const erasing = covering === activePaint
-    const matchingElements = target.id
-      ? Array.from(
-          diagramRef.current?.querySelectorAll<SVGElement>(
-            `#${CSS.escape(target.id)}`
-          ) ?? [],
-        )
-      : [target]
-
-    setUndoStack((stack) => [...stack, selected])
-    setRedoStack([])
-
-    setSelected((current) => {
-      let next = current
-
-      for (const el of matchingElements) {
-        const cleared = withoutPaint(next, el)
-        next = erasing
-          ? cleared
-          : withPaint(cleared, el, activePaint)
-      }
-
-      return next
-    })
-
-    if (!target.id) return
-
+  // Saves the record as it now stands. It is also what every drawing is painted from.
+  async function saveStates(next: Record<string, SegmentState>) {
+    setCaseData((prev) => (prev ? { ...prev, segmentStates: next } : prev))
     try {
-      const newState = erasing ? null : SEGMENT_STATE_BY_PAINT[activePaint]
-      const nextStates = computeUpdatedSegmentStates(
-        caseData?.segmentStates ?? {},
-        target,
-        svg,
-        newState,
-        diagramRef.current,
-      )
-      setCaseData((prev) => (prev ? { ...prev, segmentStates: nextStates } : prev))
-      await setAllSegmentStates(caseId, nextStates)
+      await setAllSegmentStates(caseId, next)
     } catch (err) {
-      console.error('Failed to update segment state in DB:', err)
+      console.error('Failed to save segment states:', err)
     }
   }
 
-  function applySelectionChange(
-    newSelected: PaintedSegment[]
-  ) {
-    setUndoStack((stack) => [...stack, selected])
+  function applyChange(next: Record<string, SegmentState>) {
+    setUndoStack((stack) => [...stack, segmentStates ?? {}])
     setRedoStack([])
-    setSelected(newSelected)
+    void saveStates(next)
   }
 
-  async function persistSelection(selection: PaintedSegment[]) {
-    const segmentStates: Record<string, SegmentState> = {}
-    selection.forEach(({ element, paint }) => {
-      if (element.id) segmentStates[element.id] = SEGMENT_STATE_BY_PAINT[paint]
-    })
-    setCaseData((prev) => (prev ? { ...prev, segmentStates } : prev))
-    await setAllSegmentStates(caseId, segmentStates)
+  // Marks build up: each tap paints another segment in the active colour, and
+  // tapping one that already shows that colour, as itself or as part of
+  // something marked whole, wipes it, so the same button both paints and
+  // erases. Tapping it in a different colour repaints instead.
+  function markSegment(id: string) {
+    const states = segmentStates ?? {}
+    const state = SEGMENT_STATE_BY_PAINT[activePaint]
+    const erasing = coveringState(hierarchy(), states, id, state) === state
+    applyChange(withMark(hierarchy(), states, id, erasing ? null : state))
   }
 
-  async function undo() {
+  function undo() {
     if (undoStack.length === 0) return
-
-    const previous = undoStack[undoStack.length - 1]
     setUndoStack((stack) => stack.slice(0, -1))
-    setRedoStack((stack) => [...stack, selected])
-    setSelected(previous)
-
-    try {
-      await persistSelection(previous)
-    } catch (err) {
-      console.error('Failed to undo segment change:', err)
-    }
+    setRedoStack((stack) => [...stack, segmentStates ?? {}])
+    void saveStates(undoStack[undoStack.length - 1])
   }
 
-  async function redo() {
+  function redo() {
     if (redoStack.length === 0) return
-
-    const next = redoStack[redoStack.length - 1]
     setRedoStack((stack) => stack.slice(0, -1))
-    setUndoStack((stack) => [...stack, selected])
-    setSelected(next)
-
-    try {
-      await persistSelection(next)
-    } catch (err) {
-      console.error('Failed to redo segment change:', err)
-    }
+    setUndoStack((stack) => [...stack, segmentStates ?? {}])
+    void saveStates(redoStack[redoStack.length - 1])
   }
 
-  async function handleSearchOption(option: SearchOption) {
+  // Picking a bone by name paints it in the active colour, so picking by name
+  // and by tapping can be mixed freely. Unlike a tap it never erases.
+  function handleSearchOption(option: SearchOption) {
     const activeLayer = getActiveLayerClass(activeView)
     const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     const match = [...(svg?.querySelectorAll<SVGElement>('[id]') ?? [])].find(
       (element) => element.id === option.id,
     )
-    if (!svg || !match) return
-
-    const selectedElement = selectionAt(match, svg, selectionMode)
-    // Paints for the same reason a click does, so picking bones by name and by
-    // tapping them can be mixed freely.
-    if (selectedElement) {
-      const matchingElements = selectedElement.id
-        ? Array.from(
-            diagramRef.current?.querySelectorAll<SVGElement>(
-              `#${CSS.escape(selectedElement.id)}`
-            ) ?? [],
-          )
-        : [selectedElement]
-
-      setUndoStack((stack) => [...stack, selected])
-      setRedoStack([])
-
-      setSelected((current) => {
-        let next = current
-
-        for (const el of matchingElements) {
-          next = withPaint(withoutPaint(next, el), el, activePaint)
-        }
-
-        return next
-      })
-
-      if (selectedElement.id) {
-        try {
-          const newState = SEGMENT_STATE_BY_PAINT[activePaint]
-          const nextStates = computeUpdatedSegmentStates(
-            caseData?.segmentStates ?? {},
-            selectedElement,
-            svg,
-            newState,
-            diagramRef.current,
-          )
-          setCaseData((prev) => (prev ? { ...prev, segmentStates: nextStates } : prev))
-          await setAllSegmentStates(caseId, nextStates)
-        } catch (err) {
-          console.error('Failed to save segment state:', err)
-        }
-      }
+    const target = svg && match ? selectionAt(match, svg, selectionMode) : null
+    if (target) {
+      applyChange(withMark(hierarchy(), segmentStates ?? {}, target.id, SEGMENT_STATE_BY_PAINT[activePaint]))
     }
     setSearchTerm(option.label)
     setSheetOpen(false)
@@ -1382,7 +1191,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     setSelectionMode((mode) => (mode === 'bone' ? 'zone' : 'bone'))
   }
 
-  async function selectAllBones() {
+  // Marks everything in the drawing on screen: whatever sits at the top of it,
+  // and so everything inside that too, in every drawing of it. Marks made
+  // before inside any of it go, as the prompt warns.
+  function selectAllBones() {
     const label = paintLabel(activePaint)
     const confirmed = window.confirm(
       `Are you sure you want to mark ALL bones in this view as "${label}"? This will overwrite current bone states.`
@@ -1393,30 +1205,10 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     const svg = diagramRef.current?.querySelector(`${activeLayer} svg`) as SVGSVGElement | null
     if (!svg) return
 
-    const bones = boneOptions
-      .map((bone) => svg.querySelector(`#${CSS.escape(bone.id)}`))
-      .filter((bone): bone is Element => bone !== null)
-    applySelectionChange(bones.map((element) => ({ element, paint: activePaint })))
-
-    const stateToSave = SEGMENT_STATE_BY_PAINT[activePaint]
-    try {
-      const newStates: Record<string, SegmentState> = { ...(caseData?.segmentStates ?? {}) }
-      bones.forEach((bone) => {
-        if (bone.id) {
-          newStates[bone.id] = stateToSave
-          // Subsume and remove any child zones under this bone
-          bone.querySelectorAll('[id]').forEach((child) => {
-            if (child.id && child.id !== bone.id) {
-              delete newStates[child.id]
-            }
-          })
-        }
-      })
-      await setAllSegmentStates(caseId, newStates)
-      setCaseData((prev) => (prev ? { ...prev, segmentStates: newStates } : prev))
-    } catch (err) {
-      console.error('Failed to save all bones:', err)
-    }
+    const state = SEGMENT_STATE_BY_PAINT[activePaint]
+    applyChange(
+      topLevelIds(svg).reduce((states, id) => withMark(hierarchy(), states, id, state), segmentStates ?? {}),
+    )
   }
 
   function handleSearchPointerDown(event: React.PointerEvent<Element>) {
@@ -1503,14 +1295,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         </button>
 
         <div className="flex flex-col items-center text-center px-2 min-w-0">
-          <span className="truncate text-xs font-bold uppercase tracking-wider text-sky-700">
+          <span className="max-w-full truncate text-xs font-bold uppercase tracking-wider text-sky-700">
             {caseData?.caseName ?? 'Skeleton'}
           </span>
-          <span aria-live="polite" className="truncate text-[11px] font-medium text-slate-500">
-            {markedSegments.length === 1
-              ? `${selectionLabel(markedSegments[0].element)} — ${paintLabel(markedSegments[0].paint)}`
-              : markedSegments.length > 1
-                ? `${markedSegments.length} segments marked`
+          <span aria-live="polite" className="max-w-full truncate text-[11px] font-medium text-slate-500">
+            {recordedIds.length === 1
+              ? `${recordLabel(recordedIds[0])} — ${paintLabel(PAINT_STATE_BY_SEGMENT[segmentStates![recordedIds[0]]] ?? 'present')}`
+              : recordedIds.length > 1
+                ? `${recordedIds.length} segments marked`
                 : `Tap a ${selectionMode} to mark ${paintLabel(activePaint).toLowerCase()}`}
           </span>
         </div>
@@ -1533,7 +1325,17 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             title="Reset to Centered Front Skeleton View"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset</span>
+            <span className="hidden sm:inline">Reset</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setKeyOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Colour key"
+          >
+            <Palette className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">Key</span>
           </button>
 
           <button
@@ -1654,6 +1456,30 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           />
         </DetailSubBar>
 
+        {/* Hip Bone View Mode Sub-Bar attached directly to bottom of header */}
+        <DetailSubBar visible={isHipBarVisible}>
+          <SubBarBackButton onClick={zoomBackOut} title="Return to full skeleton view">
+            <span className="hidden sm:inline">Full </span>Skeleton
+          </SubBarBackButton>
+
+          <ViewToggle
+            options={[
+              {
+                label: <>Left<span className="hidden sm:inline"> Hip</span></>,
+                title: 'View Left Hip Bone',
+                active: activeView === 'hip-left',
+                onSelect: () => showSide('l_oscoxa'),
+              },
+              {
+                label: <>Right<span className="hidden sm:inline"> Hip</span></>,
+                title: 'View Right Hip Bone',
+                active: activeView === 'hip-right',
+                onSelect: () => showSide('r_oscoxa'),
+              },
+            ]}
+          />
+        </DetailSubBar>
+
         {/* Vertebra View Mode Sub-Bar attached directly to bottom of header */}
         <DetailSubBar visible={isVertebraBarVisible}>
           <SubBarBackButton onClick={zoomBackOut} title="Return to the spine and ribs view">
@@ -1675,7 +1501,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             <button
               type="button"
               onClick={() => zoomToDetail('skull')}
-              disabled={activeView !== 'skeleton'}
+              disabled={activeView !== 'skeleton' && activeView !== 'skeleton-back'}
               className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
               title="Zoom to detailed skull view"
               tabIndex={isSkeletonBarVisible ? 0 : -1}
@@ -1687,7 +1513,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
             <button
               type="button"
               onClick={() => zoomToDetail('ribs')}
-              disabled={activeView !== 'skeleton'}
+              disabled={activeView !== 'skeleton' && activeView !== 'skeleton-back'}
               className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-xs hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
               title="Zoom to detailed spine and ribs view"
               tabIndex={isSkeletonBarVisible ? 0 : -1}
@@ -1772,13 +1598,14 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
         <div
           className={[
             'diagram-layer skeleton-layer skeleton-back-layer',
+            ...(zoomSource === 'skeleton-back' ? zoomSourceClasses : []),
             transitionPhase === 'flipping-to-back' ? 'layer-flip-in-back' : '',
             transitionPhase === 'flipping-to-front' ? 'layer-flip-out-back' : '',
-            activeView !== 'skeleton-back' && transitionPhase === 'idle' ? 'layer-hidden' : '',
-            activeView !== 'skeleton-back' && transitionPhase !== 'flipping-to-back' && transitionPhase !== 'flipping-to-front' ? 'layer-hidden' : '',
+            activeView !== 'skeleton-back' && !isFlipping && !(isZooming && zoomSource === 'skeleton-back') ? 'layer-hidden' : '',
           ]
             .filter(Boolean)
             .join(' ')}
+          style={zoomSource === 'skeleton-back' ? zoomFrame : undefined}
           dangerouslySetInnerHTML={skeletonBackMarkup}
         />
 
@@ -1801,13 +1628,15 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           dangerouslySetInnerHTML={ribsSpineFrontMarkup}
         />
 
-        {/* Layers 5–8: Feet and Scapulae, one layer per side */}
+        {/* Layers 5–10: Feet, Scapulae and Hip Bones, one layer per side */}
         <div className={detailLayerClass('l_foot')} dangerouslySetInnerHTML={leftFootMarkup} />
         <div className={detailLayerClass('r_foot')} dangerouslySetInnerHTML={rightFootMarkup} />
         <div className={detailLayerClass('l_scapula')} dangerouslySetInnerHTML={scapulaLeftMarkup} />
         <div className={detailLayerClass('r_scapula')} dangerouslySetInnerHTML={scapulaRightMarkup} />
+        <div className={detailLayerClass('l_oscoxa')} dangerouslySetInnerHTML={leftHipMarkup} />
+        <div className={detailLayerClass('r_oscoxa')} dangerouslySetInnerHTML={rightHipMarkup} />
 
-        {/* Layer 9: The open vertebra, in the superior view of its type */}
+        {/* Layer 11: The open vertebra, in the superior view of its type */}
         <div className={detailLayerClass('vertebra')} dangerouslySetInnerHTML={vertebraMarkup(openVertebraId)} />
 
         <div
@@ -1831,7 +1660,7 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           <div
             className={[
               'overflow-hidden transition-all duration-300 ease-out',
-              toolsOpen ? 'max-h-60 translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0',
+              toolsOpen ? 'max-h-48 translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0',
             ].join(' ')}
           >
             <div className="mb-2 space-y-2 border-b border-slate-200 px-1 pb-2">
@@ -1883,8 +1712,13 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                     type="button"
                     onClick={() => setActivePaint(option.state)}
                     aria-pressed={activePaint === option.state}
+                    // Narrow screens stack the dot over a slightly smaller label,
+                    // which still hyphenates rather than spill out of a very
+                    // narrow button. The size sits on the label because the
+                    // global `button { font: inherit }` rule outranks Tailwind's
+                    // text utilities on the button itself.
                     className={[
-                      'flex items-center justify-center gap-2 rounded-2xl px-2 py-3 text-xs font-semibold transition-colors duration-200',
+                      'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2.5 text-xs font-semibold transition-colors duration-200 sm:flex-row sm:gap-2 sm:px-2 sm:py-3',
                       activePaint === option.state
                         ? 'bg-slate-900 text-white'
                         : 'bg-slate-100 text-slate-600',
@@ -1893,15 +1727,12 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
                     <span
                       className={`h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10 ${option.swatch}`}
                     />
-                    {option.label}
+                    <span className="max-w-full text-center leading-tight hyphens-auto [overflow-wrap:anywhere] max-sm:text-xs">
+                      {option.label}
+                    </span>
                   </button>
                 ))}
               </div>
-
-              <p className="flex items-center gap-2 px-1 text-left text-[11px] font-medium text-slate-500">
-                <span className="h-3 w-3 shrink-0 rounded-full bg-amber-400 ring-1 ring-black/10" />
-                Amber: only some of the bone's zones are marked. Open it to see which.
-              </p>
             </div>
           </div>
 
@@ -1985,6 +1816,23 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
           </div>
         </div>
       </div>
+      <InfoPopup isOpen={keyOpen} title="Colour key" onClose={() => setKeyOpen(false)}>
+        <ul className="space-y-3">
+          {COLOUR_KEY.map((entry) => (
+            <li key={entry.name} className="flex items-start gap-3">
+              <span
+                className="mt-0.5 h-4 w-4 shrink-0 rounded-full ring-1 ring-black/15"
+                style={{ background: entry.colour }}
+              />
+              <span>
+                <span className="block font-semibold text-slate-900">{entry.name}</span>
+                <span className="block text-xs text-slate-500">{entry.meaning}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </InfoPopup>
+
       <NotesPopup
 	      isOpen={notesOpen}
         caseName={caseData?.caseName}
