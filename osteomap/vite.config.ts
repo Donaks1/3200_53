@@ -16,7 +16,8 @@ export default defineConfig({
         name: 'OsteoMap Skeletal Inventory',
         short_name: 'OsteoMap',
         display: 'standalone',
-        start_url: '/',
+        // start_url is left out so it follows Vite's base path, which the
+        // GitHub Pages build sets to /3200_53/ (see .github/workflows/deploy.yml).
         orientation: 'portrait',
         theme_color: '#0284c7',
         background_color: '#ffffff',
