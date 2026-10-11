@@ -22,12 +22,14 @@ export default defineConfig({
         theme_color: '#0284c7',
         background_color: '#ffffff',
         // Browsers only offer to install an app whose manifest has icons of at
-        // least 192 and 512 pixels. The artwork is public/pwa-icon.svg; the
-        // icon sits well inside the edges, so it also works as a maskable icon.
+        // least 192 and 512 pixels. The artwork is the Centre for Forensic
+        // Anthropology logo (public/CFA Logo.JPG). Android crops maskable icons
+        // to a circle or squircle, so that one has extra white margin to keep
+        // the lettering clear of the crop.
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

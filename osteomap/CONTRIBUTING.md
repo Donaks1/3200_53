@@ -65,6 +65,51 @@ Everything app-related lives under `osteomap/`:
 
 There's no `src/components/` folder yet — as soon as more than one person is building UI, agree on a structure (e.g. `src/components/`, `src/hooks/`, `src/lib/`) before it grows organically.
 
+## Bone and zone IDs
+
+Every bone and zone has one ID. The SVG drawings, the database and the CSV export all use it, and the app works out every name a person reads from it (`src/pages/segmentNames.ts`).
+
+```
+[left_|right_]<element>[_zone_[left_|right_]<zone>]
+```
+
+| ID | Reads as |
+|----|----------|
+| `left_femur` | Left femur |
+| `left_femur_zone_11` | Left femur — zone 11 |
+| `vertebra_t7_zone_2` | T7 vertebra — zone 2 |
+| `mandible_zone_left_3` | Mandible — left zone 3 |
+| `left_hand_distal_phalanx_4` | Left hand distal phalanx 4 |
+| `cranium_zone_left_orbit` | Cranium — left orbit |
+
+- Lowercase words joined by underscores.
+- The side is the subject's, not the viewer's: on the front view the left bones are on the right of the screen.
+- Elements are named in full and counted the anatomical way: digits 1–5 from the thumb or big toe, ribs 1–12 from the top, vertebrae `vertebra_c1`–`c7`, `t1`–`t12` and `l1`–`l5`.
+- Zones keep their zonation-method number (or letters, as on the ulna). A midline bone drawn in a left and a right half puts the side on the zone: `mandible_zone_right_7`.
+- A bone drawn as one shape has no zones. Its group carries the bone ID and the shape has no ID.
+- In an SVG, a bone is a `<g>` with the bone's ID, and its zones are the shapes inside it. Groups of bones are regions, named for what they hold.
+- Teeth and cartilage are drawn but never recorded (IDs starting `teeth` or containing `cartilage`).
+
+The elements, head to toe (the order the CSV lists them). Every `left_` element has a `right_` twin.
+
+| Region | IDs |
+|--------|-----|
+| Skull | `skull` (region), `cranium` (zones `cranium_zone_1`–`15`, `cranium_zone_left_orbit`, `cranium_zone_right_orbit`), `mandible` (zones `mandible_zone_left_1`–`7`, `mandible_zone_right_1`–`7`) |
+| Spine | `spine_and_ribs`, `cervical_vertebrae`, `thoracic_vertebrae`, `lumbar_vertebrae` (regions), `vertebra_c1`–`c7`, `vertebra_t1`–`t12`, `vertebra_l1`–`l5`, `sacrum`, `coccyx` |
+| Thorax | `left_ribs` (region), `left_rib_1`–`12`, `sternum` |
+| Shoulder | `left_clavicle`, `left_scapula` |
+| Arm | `left_humerus`, `left_radius`, `left_ulna` |
+| Hand | `left_hand`, `left_carpals`, `left_hand_digit_1`–`5` (regions); `left_scaphoid`, `left_lunate`, `left_triquetrum`, `left_pisiform`, `left_trapezium`, `left_trapezoid`, `left_capitate`, `left_hamate`, `left_metacarpal_1`–`5`, `left_hand_proximal_phalanx_1`–`5`, `left_hand_middle_phalanx_2`–`5`, `left_hand_distal_phalanx_1`–`5` |
+| Pelvis | `pelvis` (region), `left_hip_bone` |
+| Leg | `left_femur`, `left_patella`, `left_tibia`, `left_fibula` |
+| Foot | `left_foot` (region), `left_talus`, `left_calcaneus`, `left_navicular`, `left_cuboid`, `left_medial_cuneiform`, `left_intermediate_cuneiform`, `left_lateral_cuneiform`, `left_metatarsal_1`–`5`, `left_foot_proximal_phalanx_1`–`5`, `left_foot_middle_phalanx_2`–`5`, `left_foot_distal_phalanx_1`–`5` |
+
+**Editing a drawing:** name the Illustrator layers with these IDs so a re-export keeps them, and check that no `_x5F_` or `-2` suffixes come through. `npm test` fails if any ID in a drawing breaks the convention.
+
+**Renaming an ID later:** saved records and exported CSV files keep the old ID. Add a new database version in `src/db/db.ts` that moves them, and an entry in `src/pages/legacySegmentIds.ts`. That table already maps every ID used before this convention to its new one.
+
+**The CSV export:** the INVENTORY table has one row per bone or zone, head to toe. Each row has `Region`, `Bone`, `Side`, `Zone` and `Segment ID`, then a column per specimen holding complete, absent or fragmentary. `Whole bone` in the Zone column means the mark is on the bone itself. A mark on a whole region (Select All, a whole hand) is listed as each bone it covers. Import reads the `Segment ID` column. Files from before this convention, which have a single `Bone` column of old IDs, still import.
+
 ## GitHub workflow
 
 **`main` is always in a working, demoable state. Nobody commits directly to `main`. Branch protection means you physically can't push straight to `main` or merge without going through a pull request — but approval isn't required, so a PR can be merged without another person reviewing it first.**

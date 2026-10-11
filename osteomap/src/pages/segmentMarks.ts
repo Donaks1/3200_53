@@ -10,6 +10,8 @@ import type { SegmentState } from '../db/types'
 export type Hierarchy = {
   parent: Map<string, string>
   children: Map<string, string[]>
+  // Every recorded id any of the drawings has.
+  ids: Set<string>
 }
 
 // A drawing and, where its top level belongs to something it doesn't draw
@@ -66,7 +68,7 @@ export function hierarchyOf(sources: HierarchySource[]): Hierarchy {
     const owner = parent.get(id)
     if (owner) children.set(owner, [...(children.get(owner) ?? []), id])
   }
-  return { parent, children }
+  return { parent, children, ids: new Set(owners.keys()) }
 }
 
 const childrenOf = (hierarchy: Hierarchy, id: string) => hierarchy.children.get(id) ?? []
@@ -202,12 +204,4 @@ export function topLevelIds(svg: Element): string[] {
       return true
     })
     .map((element) => element.id)
-}
-
-// Where a zone sits among its bone's, for naming it: "zone 3 of 12".
-export function zonePosition(hierarchy: Hierarchy, id: string): { bone: string; index: number; count: number } | null {
-  const bone = hierarchy.parent.get(id)
-  if (!bone || childrenOf(hierarchy, id).length > 0) return null
-  const zones = childrenOf(hierarchy, bone)
-  return { bone, index: zones.indexOf(id) + 1, count: zones.length }
 }

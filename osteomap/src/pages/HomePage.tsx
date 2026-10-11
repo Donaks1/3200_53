@@ -3,11 +3,15 @@ import type { NavigateFn } from './types'
 import { createSite, getAllSites, updateSite, deleteSite } from '../db/siteOperation'
 import { createContext, getContextsBySiteId, updateContext, deleteContext } from '../db/contextOperation'
 import { createCase, getCasesByContext, updateCaseMetadata, deleteCase } from '../db/caseOperation'
-import type { SiteRecord, ContextRecord, CaseRecord, AgeGroup } from '../db/types'
+import type { SiteRecord, ContextRecord, CaseRecord } from '../db/types'
+import { duplicateNameMessage, sameName } from '../db/names'
+import { LOAD_ERROR_MESSAGE, saveErrorMessage } from '../db/errors'
 import Metadata from '../components/Metadata'
 import type { SpecimenMetadata } from '../components/Metadata'
 import SkeletonPreview from '../components/SkeletonPreview'
 import HelpPopup from '../components/HelpPopup'
+import SpecimenEditPopup, { type SpecimenEdit } from '../components/SpecimenEditPopup'
+import ErrorBanner from '../components/ErrorBanner'
 import { Plus, Pencil, Trash2, Bone, ArrowRight, Calendar, CircleHelp, MapPin, Layers, User, List, FileJson, X } from 'lucide-react'
 
 function formatDate(isoString?: string): string {
@@ -23,6 +27,22 @@ function formatDate(isoString?: string): string {
   } catch {
     return isoString
   }
+}
+
+// Asks for a new name with the browser's prompt, asking again after saying why
+// whenever the answer is blank or clashes (`clash` returns the reason). Keeping
+// the current name, even in different capitals, never clashes. Null when
+// cancelled.
+function askForName(question: string, current: string, clash: (name: string) => string | null): string | null {
+  let answer = window.prompt(question, current)
+  while (answer !== null) {
+    const name = answer.trim()
+    const problem = !name ? "The name can't be empty." : sameName(name, current) ? null : clash(name)
+    if (!problem) return name
+    window.alert(problem)
+    answer = window.prompt(question, name)
+  }
+  return null
 }
 
 function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
@@ -42,10 +62,24 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const [caseDraft, setCaseDraft] = useState('')
   const [PopMeta, setPopMeta] = useState(false)
   const [TempName, setTempName] = useState('')
+  const [editingCase, setEditingCase] = useState<CaseRecord | null>(null)
+  // A change that couldn't be saved, or records that couldn't be read.
+  const [notice, setNotice] = useState<string | null>(null)
 
   const currentSite = sites.find((s) => s.siteId === siteId)
   const currentContext = contexts.find((c) => c.contextId === contextId)
   const currentCase = cases.find((cas) => cas.caseId === caseId)
+
+  // A name already in use is flagged while it's typed, before anything is saved.
+  // `contexts` and `cases` only ever hold the open site's and context's.
+  const siteDraftClash =
+    siteDraft.trim() && sites.some((s) => sameName(s.siteName, siteDraft)) ? duplicateNameMessage('site', siteDraft) : null
+  const contextDraftClash =
+    contextDraft.trim() && contexts.some((c) => sameName(c.contextName, contextDraft))
+      ? duplicateNameMessage('context', contextDraft)
+      : null
+  const caseDraftClash =
+    caseDraft.trim() && cases.some((c) => sameName(c.caseName, caseDraft)) ? duplicateNameMessage('specimen', caseDraft) : null
 
   const isSpecimenReady = Boolean(currentSite && currentContext && currentCase)
   const [prevSelection, setPrevSelection] = useState<{
@@ -78,15 +112,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   const activeAbsentBonesCount = Object.values(activeSegmentStates).filter((s) => s === 'absent').length
 
   useEffect(() => {
-    getAllSites().then(setSites)
+    getAllSites()
+      .then(setSites)
+      .catch(() => setNotice(LOAD_ERROR_MESSAGE))
   }, [])
 
   useEffect(() => {
     let active = true
     if (siteId) {
-      getContextsBySiteId(siteId).then((res) => {
-        if (active) setContexts(res)
-      })
+      getContextsBySiteId(siteId)
+        .then((res) => {
+          if (active) setContexts(res)
+        })
+        .catch(() => {
+          if (active) setNotice(LOAD_ERROR_MESSAGE)
+        })
     } else {
       Promise.resolve().then(() => {
         if (active) setContexts([])
@@ -100,9 +140,13 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   useEffect(() => {
     let active = true
     if (contextId) {
-      getCasesByContext(contextId).then((res) => {
-        if (active) setCases(res)
-      })
+      getCasesByContext(contextId)
+        .then((res) => {
+          if (active) setCases(res)
+        })
+        .catch(() => {
+          if (active) setNotice(LOAD_ERROR_MESSAGE)
+        })
     } else {
       Promise.resolve().then(() => {
         if (active) setCases([])
@@ -117,28 +161,44 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   // --- Site buttons ---
   async function addSite(name: string) {
     const nextName = name.trim()
-    if (!nextName) return
-    const site = await createSite(nextName)
-    setSites((prev) => [...prev, site])
-    setSiteId(site.siteId)
-    setContextId(null)
-    setCaseId(null)
-    setSiteDraft('')
-    setAddingSite(false)
+    if (!nextName || sites.some((s) => sameName(s.siteName, nextName))) return
+    try {
+      const site = await createSite(nextName)
+      setSites((prev) => [...prev, site])
+      setSiteId(site.siteId)
+      setContextId(null)
+      setCaseId(null)
+      setSiteDraft('')
+      setAddingSite(false)
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+    }
   }
 
 
   async function editSite(id: string) {
     const site = sites.find((s) => s.siteId === id)
-    const name = window.prompt('Rename site', site?.siteName)
-    if (!name) return
-    await updateSite(id, name)
-    setSites((prev) => prev.map((s) => (s.siteId === id ? { ...s, siteName: name } : s)))
+    if (!site) return
+    const name = askForName('Rename site', site.siteName, (next) =>
+      sites.some((s) => s.siteId !== id && sameName(s.siteName, next)) ? duplicateNameMessage('site', next) : null,
+    )
+    if (name === null || name === site.siteName) return
+    try {
+      await updateSite(id, name)
+      setSites((prev) => prev.map((s) => (s.siteId === id ? { ...s, siteName: name } : s)))
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+    }
   }
 
   async function removeSite(id: string) {
     if (!window.confirm('Delete this site?')) return
-    await deleteSite(id)
+    try {
+      await deleteSite(id)
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+      return
+    }
     setSites((prev) => prev.filter((s) => s.siteId !== id))
     if (siteId === id) {
       setSiteId(null)
@@ -153,30 +213,46 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   async function addContext(name: string) {
     if (!currentSite) return
     const nextName = name.trim()
-    if (!nextName) return
-    const newContext = await createContext(nextName, currentSite.siteId)
-    setContexts((prev) => [...prev, newContext])
-    setContextId(newContext.contextId)
-    setCaseId(null)
-    setContextDraft('')
-    setAddingContext(false)
+    if (!nextName || contexts.some((c) => sameName(c.contextName, nextName))) return
+    try {
+      const newContext = await createContext(nextName, currentSite.siteId)
+      setContexts((prev) => [...prev, newContext])
+      setContextId(newContext.contextId)
+      setCaseId(null)
+      setContextDraft('')
+      setAddingContext(false)
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+    }
   }
 
 
   async function editContext(id: string) {
     if (!currentSite) return
     const ctx = contexts.find((c) => c.contextId === id)
-    const name = window.prompt('Rename context', ctx?.contextName)
-    if (!name) return
-    await updateContext(id, name)
-    setContexts((prev) => prev.map((c) => (c.contextId === id ? { ...c, contextName: name } : c)))
+    if (!ctx) return
+    const name = askForName('Rename context', ctx.contextName, (next) =>
+      contexts.some((c) => c.contextId !== id && sameName(c.contextName, next)) ? duplicateNameMessage('context', next) : null,
+    )
+    if (name === null || name === ctx.contextName) return
+    try {
+      await updateContext(id, name)
+      setContexts((prev) => prev.map((c) => (c.contextId === id ? { ...c, contextName: name } : c)))
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+    }
   }
 
   
   async function removeContext(id: string) {
     if (!currentSite) return
     if (!window.confirm('Delete this context?')) return
-    await deleteContext(id)
+    try {
+      await deleteContext(id)
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+      return
+    }
     setContexts((prev) => prev.filter((c) => c.contextId !== id))
     if (contextId === id) {
       setContextId(null)
@@ -195,7 +271,7 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
  function handleCaseNameSave(name: string) {
     const nextName = name.trim()
-    if (!nextName) return
+    if (!nextName || cases.some((c) => sameName(c.caseName, nextName))) return
     setTempName(nextName)
     setCaseDraft('')
     setAddingCase(false)
@@ -203,16 +279,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
   }
 
 
+  // A failed save leaves the details open, so nothing typed into them is lost.
   async function handleMetadataSave(metadata: SpecimenMetadata) {
     if (!currentContext) return
-    const newCase = await createCase(currentContext.contextId, {
-      caseName: TempName,
-      ...metadata,
-    })
-    setCases((prev) => [...prev, newCase])
-    setCaseId(newCase.caseId)
-    setPopMeta(false)
-    setTempName('')
+    try {
+      const newCase = await createCase(currentContext.contextId, {
+        caseName: TempName,
+        ...metadata,
+      })
+      setCases((prev) => [...prev, newCase])
+      setCaseId(newCase.caseId)
+      setPopMeta(false)
+      setTempName('')
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+    }
   }
 
 
@@ -225,23 +306,30 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
 
 
- async function editCase(id: string) {
-    if (!currentSite || !currentContext) return
+  function editCase(id: string) {
     const caseItem = cases.find((c) => c.caseId === id)
-    const name = window.prompt('Rename case', caseItem?.caseName)
-    const sex = window.prompt('Sex? (male/female/unknown)', caseItem?.sex) ?? 'unknown'
+    if (caseItem) setEditingCase(caseItem)
+  }
 
-    const ageGroup = window.prompt('Age group? (infant/child/adolescent/adult)', caseItem?.ageGroup) as AgeGroup
-      if (!name) return
-      await updateCaseMetadata(id, { caseName: name, sex, ageGroup })
-      setCases((prev) => prev.map((c) => (c.caseId === id ? { ...c, caseName: name, sex, ageGroup } : c)))
+  // A failed save rejects, and the edit popup stays open to say why.
+  async function saveCaseEdit(edit: SpecimenEdit) {
+    if (!editingCase) return
+    await updateCaseMetadata(editingCase.caseId, edit)
+    const dateModified = new Date().toISOString()
+    setCases((prev) => prev.map((c) => (c.caseId === editingCase.caseId ? { ...c, ...edit, dateModified } : c)))
+    setEditingCase(null)
   }
 
 
   async function removeCase(id: string) {
     if (!currentSite || !currentContext) return
     if (!window.confirm('Delete this case?')) return
-    await deleteCase(id)
+    try {
+      await deleteCase(id)
+    } catch (error) {
+      setNotice(saveErrorMessage(error))
+      return
+    }
     setCases((prev) => prev.filter((c) => c.caseId !== id))
     if (caseId === id) setCaseId(null)
   }
@@ -310,13 +398,14 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               <input
                 value={siteDraft}
                 onChange={(event) => setSiteDraft(event.target.value)}
+                aria-invalid={siteDraftClash ? true : undefined}
                 placeholder="Site name"
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               />
               <button
                 type="submit"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                disabled={!siteDraft.trim()}
+                disabled={!siteDraft.trim() || Boolean(siteDraftClash)}
                 aria-label="Create site"
               >
                 <Plus className="h-4 w-4" />
@@ -335,6 +424,11 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
                 </button>
               )}
             </form>
+          )}
+          {(sites.length === 0 || addingSite) && siteDraftClash && (
+            <p role="alert" className="mb-2 px-1 text-xs font-medium text-rose-600">
+              {siteDraftClash}
+            </p>
           )}
 
           {sites.map((s) => (
@@ -414,13 +508,14 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               <input
                 value={contextDraft}
                 onChange={(event) => setContextDraft(event.target.value)}
+                aria-invalid={contextDraftClash ? true : undefined}
                 placeholder="Context name"
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               />
               <button
                 type="submit"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                disabled={!contextDraft.trim()}
+                disabled={!contextDraft.trim() || Boolean(contextDraftClash)}
                 aria-label="Create context"
               >
                 <Plus className="h-4 w-4" />
@@ -439,6 +534,11 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
                 </button>
               )}
             </form>
+          )}
+          {currentSite && (contexts.length === 0 || addingContext) && contextDraftClash && (
+            <p role="alert" className="mb-2 px-1 text-xs font-medium text-rose-600">
+              {contextDraftClash}
+            </p>
           )}
           {contexts.map((c) => (
             <div
@@ -517,13 +617,14 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
               <input
                 value={caseDraft}
                 onChange={(event) => setCaseDraft(event.target.value)}
+                aria-invalid={caseDraftClash ? true : undefined}
                 placeholder="Specimen ID"
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               />
               <button
                 type="submit"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                disabled={!caseDraft.trim()}
+                disabled={!caseDraft.trim() || Boolean(caseDraftClash)}
                 aria-label="Continue specimen creation"
               >
                 <ArrowRight className="h-4 w-4" />
@@ -542,6 +643,11 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
                 </button>
               )}
             </form>
+          )}
+          {currentContext && (cases.length === 0 || addingCase) && caseDraftClash && (
+            <p role="alert" className="mb-2 px-1 text-xs font-medium text-rose-600">
+              {caseDraftClash}
+            </p>
           )}
           {cases.map((cas) => (
             <div
@@ -698,7 +804,8 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
 
         <button
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-100 transition-colors cursor-pointer"
-          onClick={() => onNavigate('export')}
+          // The export page is about the specimen picked here, or none at all.
+          onClick={() => onNavigate('export', isSpecimenReady ? currentCase?.caseId : undefined)}
         >
           <FileJson className="h-4 w-4" />
           Import / Export
@@ -713,6 +820,21 @@ function HomePage({ onNavigate }: { onNavigate: NavigateFn }) {
         onSave={handleMetadataSave}
         onCancel={cancelAddCase}
       />
+
+      {editingCase && (
+        <SpecimenEditPopup
+          key={editingCase.caseId}
+          title="Edit specimen"
+          idLabel="Specimen ID"
+          location={currentSite && currentContext ? `${currentSite.siteName} / ${currentContext.contextName}` : undefined}
+          specimen={editingCase}
+          nameTaken={(name) => cases.some((c) => c.caseId !== editingCase.caseId && sameName(c.caseName, name))}
+          onSave={saveCaseEdit}
+          onCancel={() => setEditingCase(null)}
+        />
+      )}
+
+      <ErrorBanner message={notice} onDismiss={() => setNotice(null)} />
 
       </main>
     </div>

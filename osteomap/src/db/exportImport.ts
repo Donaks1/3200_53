@@ -2,6 +2,8 @@ import { saveAs } from "file-saver";
 import { db } from "./db";
 import { createId } from "./id";
 import type { CaseRecord, ContextRecord, SiteRecord, SegmentState } from "./types";
+import { hierarchy } from "../pages/skeletonDrawings";
+import { compareSegments, currentSegmentStates, describeSegment, zoneColumn } from "../pages/segmentNames";
 
 const SPECIMENS_TITLE = 'SPECIMENS';
 const INVENTORY_TITLE = 'INVENTORY';
@@ -10,7 +12,12 @@ const SPECIMEN_HEADERS = [
     'Site', 'Context', 'Specimen', 'Sex', 'Age Group', 'Field Notes', 'Date Created', 'Date Modified'
 ] as const;
 const REQUIRED_SPECIMEN_HEADERS = ['Specimen ID', 'Site', 'Context', 'Specimen'] as const;
-const BONE_HEADER = 'Bone';
+// Each INVENTORY row says what it is in words, then by the id the app knows it
+// by; the specimens' states follow, one column each. Files from before the ids
+// were standardised have just a "Bone" column of old ids.
+const INVENTORY_HEADERS = ['Region', 'Bone', 'Side', 'Zone', 'Segment ID'] as const;
+const SEGMENT_ID_HEADER = 'Segment ID';
+const LEGACY_BONE_HEADER = 'Bone';
 const SEGMENT_STATES: SegmentState[] = ['complete', 'absent', 'fragmentary'];
 
 function escapeCsv(value: string): string {
@@ -24,9 +31,31 @@ function toCsvRow(fields: string[]): string {
     return fields.map(escapeCsv).join(',');
 }
 
-function compareSegmentIds(a: string, b: string): number {
-    const stripSide = (id: string) => id.replace(/^[lr]_/, '');
-    return stripSide(a).localeCompare(stripSide(b)) || a.localeCompare(b);
+// A mark on a region (the whole skull, a hand, the spine and ribs) stands for
+// every bone in it, so the export lists those bones one by one: every row is a
+// single bone or zone, and rows line up from specimen to specimen however each
+// was recorded. Importing the file back marks those bones, which shows the same.
+function inventoryOf(states: Record<string, SegmentState>): Map<string, SegmentState> {
+    const { children } = hierarchy();
+    const parts = new Map<string, SegmentState>();
+    const add = (id: string, state: SegmentState) => {
+        const inside = children.get(id);
+        if (describeSegment(id)?.kind === 'region' && inside?.length) {
+            inside.forEach((part) => add(part, state));
+        } else {
+            parts.set(id, state);
+        }
+    };
+    Object.entries(states).forEach(([id, state]) => add(id, state));
+    return parts;
+}
+
+// The words in front of a row's states. An id this version can't read (from a
+// newer drawing, say) is kept, with the region saying so.
+function describeRow(id: string): string[] {
+    const name = describeSegment(id);
+    if (!name) return ['Not recognised', '', '', '', id];
+    return [name.region, name.bone, name.side, zoneColumn(name), id];
 }
 
 interface SpecimenLabelSource {
@@ -76,11 +105,12 @@ function buildCsv(cases: CaseRecord[], contextMap: Map<string, ContextRecord>, s
         ]));
     }
 
-    const segmentIds = Array.from(new Set(cases.flatMap(c => Object.keys(c.segmentStates ?? {})))).sort(compareSegmentIds);
+    const inventories = cases.map(c => inventoryOf(c.segmentStates ?? {}));
+    const segmentIds = Array.from(new Set(inventories.flatMap(inventory => [...inventory.keys()]))).sort(compareSegments);
 
-    rows.push('', INVENTORY_TITLE, toCsvRow([BONE_HEADER, ...getSpecimenLabels(labelSources)]));
+    rows.push('', INVENTORY_TITLE, toCsvRow([...INVENTORY_HEADERS, ...getSpecimenLabels(labelSources)]));
     for (const segmentId of segmentIds) {
-        rows.push(toCsvRow([segmentId, ...cases.map(c => c.segmentStates?.[segmentId] ?? '')]));
+        rows.push(toCsvRow([...describeRow(segmentId), ...inventories.map(inventory => inventory.get(segmentId) ?? '')]));
     }
     return rows.join('\n');
 }
@@ -104,6 +134,7 @@ export async function exportSingleCaseCSV(caseId: string): Promise<void> {
         saveAs(blob, `osteomap_case_${caseRecord.caseName}.csv`);
     } catch (error) {
         console.error("Error exporting single case to CSV:", error);
+        throw error;
     }
 }
 
@@ -122,6 +153,7 @@ export async function exportDatabaseCSV(): Promise<void> {
         saveAs(blob, "osteomap_database.csv");
     } catch (error) {
         console.error("Error exporting database to CSV:", error);
+        throw error;
     }
 }
 
@@ -236,6 +268,8 @@ export interface ParsedImport {
     sites: SiteRecord[];
     contexts: ContextRecord[];
     cases: CaseRecord[];
+    // Bone or zone ids in the file that none of the drawings has.
+    unrecognisedSegments: string[];
 }
 
 export type ImportPreview = ParsedImport & {
@@ -469,17 +503,22 @@ function toParsedImport(fileText: string): ParsedImport {
         throw new Error("The CSV file has no specimens to import.");
     }
 
+    const unrecognised = new Set<string>();
     if (inventoryRows.length) {
         const [inventoryHeader, ...boneRows] = inventoryRows;
-        if (cell(inventoryHeader, 0) !== BONE_HEADER) {
-            throw new Error(`The ${INVENTORY_TITLE} table must start with a "${BONE_HEADER}" column.`);
+        const headers = inventoryHeader.map(name => name.trim().toLowerCase());
+        const segmentIdColumn = headers.indexOf(SEGMENT_ID_HEADER.toLowerCase());
+        const idColumn = segmentIdColumn >= 0 ? segmentIdColumn : headers[0] === LEGACY_BONE_HEADER.toLowerCase() ? 0 : -1;
+        if (idColumn < 0) {
+            throw new Error(`The ${INVENTORY_TITLE} table needs a "${SEGMENT_ID_HEADER}" column saying which bone or zone each row is.`);
         }
 
         const caseIdByLabel = new Map<string, string>();
         getSpecimenLabels(labelSources).forEach((label, i) => caseIdByLabel.set(normaliseName(label), labelSources[i].caseId));
 
-        const specimenColumns = inventoryHeader.slice(1)
-            .map((value, offset) => ({ label: value.trim(), index: offset + 1 }))
+        // The specimens' columns are the ones after the id.
+        const specimenColumns = inventoryHeader.slice(idColumn + 1)
+            .map((value, offset) => ({ label: value.trim(), index: idColumn + 1 + offset }))
             .filter(({ label }) => label)
             .map(({ label, index }) => {
                 const caseId = caseIdByLabel.get(normaliseName(label)) ?? (caseMap.has(label) ? label : undefined);
@@ -490,7 +529,7 @@ function toParsedImport(fileText: string): ParsedImport {
             });
 
         for (const row of boneRows) {
-            const segmentId = cell(row, 0);
+            const segmentId = cell(row, idColumn);
             if (!segmentId) continue;
 
             for (const { caseId, index } of specimenColumns) {
@@ -503,12 +542,22 @@ function toParsedImport(fileText: string): ParsedImport {
                 caseRecord.segmentStates[segmentId] = state as SegmentState;
             }
         }
+
+        // A file from an earlier version names bones by the ids they had then;
+        // the records take the ids they have now. Any id no drawing has is kept
+        // as it is, and the preview says so.
+        const drawn = hierarchy().ids;
+        for (const caseRecord of caseMap.values()) {
+            caseRecord.segmentStates = currentSegmentStates(caseRecord.segmentStates);
+            Object.keys(caseRecord.segmentStates).filter(id => !drawn.has(id)).forEach(id => unrecognised.add(id));
+        }
     }
 
     return {
         sites: Array.from(siteMap.values()),
         contexts: Array.from(contextMap.values()),
-        cases: Array.from(caseMap.values())
+        cases: Array.from(caseMap.values()),
+        unrecognisedSegments: Array.from(unrecognised).sort()
     };
 }
 

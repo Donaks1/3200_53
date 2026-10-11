@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SkeletonPage from './SkeletonPage'
 import { createCase, getCase } from '../db/caseOperation'
+import { db } from '../db/db'
 
 async function createTestCase(name: string): Promise<string> {
   const created = await createCase('test-context', {
@@ -57,42 +58,58 @@ describe('SkeletonPage undo/redo (through the UI)', () => {
   it('Undo then Redo gets back the same state', async () => {
     const c = await setup()
 
-    clickBone(c, 'l_femur')
-    await waitFor(() => expect(paintOf(c, 'l_femur')).toBe('present'))
+    clickBone(c, 'left_femur')
+    await waitFor(() => expect(paintOf(c, 'left_femur')).toBe('present'))
 
     fireEvent.click(undoButton())
-    await waitFor(() => expect(paintOf(c, 'l_femur')).toBeNull())
+    await waitFor(() => expect(paintOf(c, 'left_femur')).toBeNull())
 
     fireEvent.click(redoButton())
-    await waitFor(() => expect(paintOf(c, 'l_femur')).toBe('present'))
+    await waitFor(() => expect(paintOf(c, 'left_femur')).toBe('present'))
 
     // Same state in the database, not just on screen.
     await waitFor(async () => {
-      expect((await getCase(caseId))?.segmentStates).toEqual({ l_femur: 'complete' })
+      expect((await getCase(caseId))?.segmentStates).toEqual({ left_femur: 'complete' })
     })
   })
 
   it('Undo only removes the most recent change', async () => {
     const c = await setup()
 
-    clickBone(c, 'l_femur')
-    clickBone(c, 'r_femur')
-    await waitFor(() => expect(paintOf(c, 'r_femur')).toBe('present'))
+    clickBone(c, 'left_femur')
+    clickBone(c, 'right_femur')
+    await waitFor(() => expect(paintOf(c, 'right_femur')).toBe('present'))
 
     fireEvent.click(undoButton())
-    await waitFor(() => expect(paintOf(c, 'r_femur')).toBeNull())
-    expect(paintOf(c, 'l_femur')).toBe('present')
+    await waitFor(() => expect(paintOf(c, 'right_femur')).toBeNull())
+    expect(paintOf(c, 'left_femur')).toBe('present')
   })
 
   it('painting after an Undo clears Redo', async () => {
     const c = await setup()
 
-    clickBone(c, 'l_femur')
+    clickBone(c, 'left_femur')
     fireEvent.click(undoButton())
     await waitFor(() => expect(redoButton()).toBeEnabled()) // proves the next assertion isn't vacuous
 
-    clickBone(c, 'r_femur')
-    await waitFor(() => expect(paintOf(c, 'r_femur')).toBe('present'))
+    clickBone(c, 'right_femur')
+    await waitFor(() => expect(paintOf(c, 'right_femur')).toBe('present'))
     expect(redoButton()).toBeDisabled()
+  })
+})
+describe('SkeletonPage when the specimen is gone', () => {
+  it('says the specimen was not found instead of showing a skeleton that ignores taps', async () => {
+    render(<SkeletonPage caseId="no-such-case" onNavigate={vi.fn()} />)
+    expect(await screen.findByRole('heading', { name: 'Specimen not found' })).toBeVisible()
+  })
+
+  it('says so on the next tap when the specimen is deleted while open', async () => {
+    caseId = await createTestCase(CASE_NAME)
+    const c = await setup()
+
+    await db.cases.delete(caseId)
+    clickBone(c, 'left_femur')
+
+    expect(await screen.findByRole('heading', { name: 'Specimen not found' })).toBeVisible()
   })
 })

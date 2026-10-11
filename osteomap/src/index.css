@@ -285,9 +285,9 @@ input {
      in :where() so a mark inside always outranks the tint. Teeth and cartilage
      are never recorded, so they keep the grey rather than invite a click. */
   .skeleton-layer
-    :where(#skull, #spine_ribs, #l_foot, #r_foot)
+    :where(#skull, #spine_and_ribs, #left_foot, #right_foot)
     :is(path, polygon, circle, ellipse):not(:where(#teeth *, [id*='cartilage'], [id*='cartilage'] *)),
-  &.zone-mode .skeleton-layer :where(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa) :is(path, polygon, circle, ellipse),
+  &.zone-mode .skeleton-layer :where(#left_scapula, #right_scapula, #left_hip_bone, #right_hip_bone) :is(path, polygon, circle, ellipse),
   &.zone-mode .ribs-layer :where([data-zone-drawing]) :is(path, polygon, circle, ellipse) {
     fill: var(--bone-expandable);
     stroke: var(--bone-expandable-edge);
@@ -379,15 +379,15 @@ input {
      from the full skeleton, front or back. The scapulae, hip bones and, inside
      the rib cage, the vertebrae only do in zone mode, as bone mode marks them
      where they are. */
-  .skeleton-layer :is(#skull, #spine_ribs, #l_foot, #r_foot),
-  &.zone-mode .skeleton-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa),
+  .skeleton-layer :is(#skull, #spine_and_ribs, #left_foot, #right_foot),
+  &.zone-mode .skeleton-layer :is(#left_scapula, #right_scapula, #left_hip_bone, #right_hip_bone),
   &.zone-mode .ribs-layer [data-zone-drawing] {
     cursor: zoom-in;
     transition: filter 0.25s ease;
   }
 
-  .skeleton-layer :is(#skull, #spine_ribs, #l_foot, #r_foot):hover,
-  &.zone-mode .skeleton-layer :is(#l_scapula, #r_scapula, #l_oscoxa, #r_oscoxa):hover,
+  .skeleton-layer :is(#skull, #spine_and_ribs, #left_foot, #right_foot):hover,
+  &.zone-mode .skeleton-layer :is(#left_scapula, #right_scapula, #left_hip_bone, #right_hip_bone):hover,
   &.zone-mode .ribs-layer [data-zone-drawing]:hover {
     filter: drop-shadow(0 0 5px rgba(14, 165, 233, 0.65)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
   }

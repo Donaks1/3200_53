@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Database, Download, House, Info, Upload } from 'lucide-react'
-import type { NavigateFn } from './types'
+import type { NavigateFn, Page } from './types'
 import { getCase } from '../db/caseOperation'
 import { getContextById } from '../db/contextOperation'
 import { getSiteById } from '../db/siteOperation'
@@ -18,7 +18,8 @@ interface PendingImport {
   resolutions: Record<string, ConflictResolution>;
 }
 
-function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate: NavigateFn }) {
+// `returnTo` is the page this one was opened from, which Back goes back to.
+function ExportPage({ caseId, returnTo, onNavigate }: { caseId?: string | null; returnTo?: Page; onNavigate: NavigateFn }) {
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
   const [contextData, setContextData] = useState<ContextRecord | null>(null);
   const [site, setSite] = useState<SiteRecord | null>(null);
@@ -27,6 +28,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
   const [importChoices, setImportChoices] = useState<ImportChoices>({ sites: {}, contexts: {} });
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [isApplyingImport, setIsApplyingImport] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!caseId) return;
@@ -55,6 +57,17 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
 
   const zonesRecorded = Object.keys(caseData?.segmentStates ?? {}).length;
 
+  // An export that fails leaves the records as they were, but the person has
+  // to know there is no backup file.
+  async function runExport(exportFile: () => Promise<void>) {
+    setExportError(null);
+    try {
+      await exportFile();
+    } catch {
+      setExportError("The export failed, so no file was saved. Your records haven't changed. Please try again.");
+    }
+  }
+
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -68,7 +81,15 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
     try {
       const preview = await previewDatabaseCSV(file);
       setImportPreview(preview);
-      setImportStatus(`${preview.cases.length} specimen${preview.cases.length === 1 ? '' : 's'} ready for review.`);
+      const unrecognised = preview.unrecognisedSegments;
+      setImportStatus(
+        `${preview.cases.length} specimen${preview.cases.length === 1 ? '' : 's'} ready for review.` +
+        (unrecognised.length
+          ? ` ${unrecognised.length} bone or zone ID${unrecognised.length === 1 ? '' : 's'} in the file ` +
+            `${unrecognised.length === 1 ? "isn't" : "aren't"} in this version's drawings (${unrecognised.slice(0, 3).join(', ')}` +
+            `${unrecognised.length > 3 ? ', …' : ''}); ${unrecognised.length === 1 ? 'it' : 'they'} will be kept as written.`
+          : '')
+      );
     } catch (error) {
       setImportStatus(error instanceof Error ? error.message : 'Import failed. Please check the file and try again.');
     }
@@ -162,7 +183,7 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
       <header className="export-header">
         <button
           type="button"
-          onClick={() => onNavigate('skeleton', caseId || undefined)}
+          onClick={() => onNavigate(returnTo ?? (caseId ? 'skeleton' : 'home'), caseId ?? undefined)}
           className="export-header-back"
         >
           <ArrowLeft aria-hidden="true" /> Back
@@ -180,16 +201,18 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
       {/* Main Container */}
       <main className="export-main">
 
-        {/* Case Details Box */}
-        <div className="export-card">
-          <h2 className="export-card-title">Active Case Data</h2>
-          <ul className="export-card-list">
-            <li><strong>Site Code:</strong> {site?.siteName || 'N/A'}</li>
-            <li><strong>Context:</strong> {contextData?.contextName || 'N/A'}</li>
-            <li><strong>Skeleton ID:</strong> {caseData?.caseName || 'N/A'}</li>
-            <li><strong>Bones Recorded:</strong> {zonesRecorded}</li>
-          </ul>
-        </div>
+        {/* Case Details Box: only when the page was opened for a specimen */}
+        {caseId && (
+          <div className="export-card">
+            <h2 className="export-card-title">Active Case Data</h2>
+            <ul className="export-card-list">
+              <li><strong>Site Code:</strong> {site?.siteName || 'N/A'}</li>
+              <li><strong>Context:</strong> {contextData?.contextName || 'N/A'}</li>
+              <li><strong>Skeleton ID:</strong> {caseData?.caseName || 'N/A'}</li>
+              <li><strong>Bones Recorded:</strong> {zonesRecorded}</li>
+            </ul>
+          </div>
+        )}
 
         <div className="export-reminder">
           <Info aria-hidden="true" />
@@ -198,22 +221,26 @@ function ExportPage({ caseId, onNavigate }: { caseId?: string | null; onNavigate
 
         <section className="export-card export-actions" aria-labelledby="export-actions-title">
           <h2 id="export-actions-title" className="export-card-title">Export Records</h2>
-          <button
-            type="button"
-            className="export-button-basic"
-            disabled={!caseData}
-            onClick={() => caseData && exportSingleCaseCSV(caseData.caseId)}
-          >
-            <Download aria-hidden="true" /> Export This Case (.csv)
-          </button>
+          {caseId && (
+            <button
+              type="button"
+              className="export-button-basic"
+              disabled={!caseData}
+              onClick={() => caseData && runExport(() => exportSingleCaseCSV(caseData.caseId))}
+            >
+              <Download aria-hidden="true" /> Export This Case (.csv)
+            </button>
+          )}
 
           <button
             type="button"
             className="export-button-secondary"
-            onClick={() => exportDatabaseCSV()}
+            onClick={() => runExport(exportDatabaseCSV)}
           >
             <Database aria-hidden="true" /> Export Full Backup (.csv)
           </button>
+
+          {exportError && <p className="export-import-status" role="alert">{exportError}</p>}
         </section>
 
         {/* Import Section */}

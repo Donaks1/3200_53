@@ -11,88 +11,79 @@ import cervicalVertebraSource from '../assets/cervical_vertebra.svg?raw'
 import thoracicVertebraSource from '../assets/thoracic_vertebra.svg?raw'
 import lumbarVertebraSource from '../assets/lumbar_vertebra.svg?raw'
 import type { SegmentState } from '../db/types'
+import { isUnrecorded } from './segmentMarks'
 
 // A vertebra's zones are drawn in a superior view of its type. One drawing
 // stands in for every vertebra of that type, so each vertebra gets its own copy
-// with the ids rewritten to its own: zones recorded on C3 are c3_1 to c3_4,
-// and never show up on C5.
+// with the ids rewritten to its own: the drawing's cervical_vertebra_zone_1 is
+// vertebra_c3_zone_1 on C3, and a zone recorded there never shows up on C5.
 export const VERTEBRA_DRAWINGS = [
-  { match: /^c[1-7]$/, count: 7, prefix: 'c', type: 'Cervical', source: cervicalVertebraSource, zonePrefix: 'cervical_vertebra' },
-  { match: /^t([1-9]|1[0-2])$/, count: 12, prefix: 't', type: 'Thoracic', source: thoracicVertebraSource, zonePrefix: 'thoracic_vertebra' },
-  { match: /^l[1-5]$/, count: 5, prefix: 'l', type: 'Lumbar', source: lumbarVertebraSource, zonePrefix: 'lumbar_vertebra' },
+  { match: /^vertebra_c[1-7]$/, count: 7, prefix: 'vertebra_c', type: 'Cervical', source: cervicalVertebraSource, zonePrefix: 'cervical_vertebra' },
+  { match: /^vertebra_t([1-9]|1[0-2])$/, count: 12, prefix: 'vertebra_t', type: 'Thoracic', source: thoracicVertebraSource, zonePrefix: 'thoracic_vertebra' },
+  { match: /^vertebra_l[1-5]$/, count: 5, prefix: 'vertebra_l', type: 'Lumbar', source: lumbarVertebraSource, zonePrefix: 'lumbar_vertebra' },
 ]
 
 export const vertebraDrawingFor = (vertebraId: string) =>
   VERTEBRA_DRAWINGS.find((drawing) => drawing.match.test(vertebraId))
 
 // Readies the front skeleton (already class-scoped by the caller) so marks
-// made in any other drawing land on it, for both the skeleton page and the
+// made in the skull drawings land on it, for both the skeleton page and the
 // skeleton previews.
 export function prepareSkeletonFront(markup: string): string {
-  return withDetailSkull(
-    withFirstRibsGrouped(
-      // In zone mode the scapula opens a drawing of its own, where l_scapula_1
-      // is one of nine zones. Here the same id names the outline of the whole
-      // bone, so it gives the id up rather than light the full scapula whenever
-      // that one zone is marked. The bone itself is still the l_scapula group.
-      markup.replace(/ id="[lr]_scapula_1"/g, ''),
-    ),
-  )
-}
-
-// Every other rib is one shape here, but rib 1 is drawn as its three zones,
-// loose in the rib cage. The spine view groups them as the bone l_rib1 /
-// r_rib1, and so does this, so a mark on that bone lands here too.
-function withFirstRibsGrouped(markup: string): string {
-  const skeleton = new DOMParser().parseFromString(markup, 'image/svg+xml')
-
-  for (const side of ['l', 'r']) {
-    const cage = skeleton.getElementById(`${side}_ribs`)
-    const zones = cage ? [...cage.children].filter((child) => child.id.startsWith(`${side}_rib1_`)) : []
-    if (!cage || !zones.length || skeleton.getElementById(`${side}_rib1`)) continue
-
-    const rib = skeleton.createElementNS('http://www.w3.org/2000/svg', 'g')
-    rib.id = `${side}_rib1`
-    zones[0].before(rib)
-    rib.append(...zones)
-  }
-
-  return new XMLSerializer().serializeToString(skeleton.documentElement)
+  return withDetailSkull(markup)
 }
 
 // Some drawings show a bone only whole, while its zones are recorded in a
 // drawing of their own: the feet, scapulae and hip bones on the full skeleton
 // (front and back), the skull from behind, and the vertebrae on the full
-// skeleton and in the spine view. Each such
-// bone is listed here with its zones, and each zone with the bones between it
-// and the whole, nearest first (a foot's zones sit inside its bones).
-const ZONE_SETS = new Map<string, Map<string, string[]>>([
-  ['skull', new Map([...zonesIn(skullFrontSource), ...zonesIn(skullLeftSource), ...zonesIn(skullRightSource)])],
-  ['l_foot', zonesIn(leftFootSource)],
-  ['r_foot', zonesIn(rightFootSource)],
-  ['l_scapula', zonesIn(scapulaLeftSource)],
-  ['r_scapula', zonesIn(scapulaRightSource)],
-  ['l_oscoxa', zonesIn(leftHipSource)],
-  ['r_oscoxa', zonesIn(rightHipSource)],
-  ...VERTEBRA_DRAWINGS.flatMap(({ count, prefix, source, zonePrefix }) =>
-    Array.from({ length: count }, (_, index): [string, Map<string, string[]>] => {
-      const vertebraId = `${prefix}${index + 1}`
-      return [vertebraId, zonesIn(source.replaceAll(`${zonePrefix}_`, `${vertebraId}_`))]
-    }),
-  ),
-])
+// skeleton and in the spine view. Each such bone is listed here with its zones,
+// and each zone with the bones between it and the whole, nearest first (a
+// foot's zones sit inside its bones). Built on first use, as it reads every
+// drawing.
+let zoneSets: Map<string, Map<string, string[]>> | null = null
+
+function zoneSetsOf(): Map<string, Map<string, string[]>> {
+  if (zoneSets) return zoneSets
+
+  zoneSets = new Map<string, Map<string, string[]>>([
+    ['skull', new Map([...zonesIn(skullFrontSource), ...zonesIn(skullLeftSource), ...zonesIn(skullRightSource)])],
+    ['left_foot', zonesIn(leftFootSource)],
+    ['right_foot', zonesIn(rightFootSource)],
+    ['left_scapula', zonesIn(scapulaLeftSource)],
+    ['right_scapula', zonesIn(scapulaRightSource)],
+    ['left_hip_bone', zonesIn(leftHipSource)],
+    ['right_hip_bone', zonesIn(rightHipSource)],
+    ...VERTEBRA_DRAWINGS.flatMap(({ count, prefix, source, zonePrefix }) =>
+      Array.from({ length: count }, (_, index): [string, Map<string, string[]>] => {
+        const vertebraId = `${prefix}${index + 1}`
+        return [vertebraId, zonesIn(source.replaceAll(`${zonePrefix}_`, `${vertebraId}_`))]
+      }),
+    ),
+  ])
+  return zoneSets
+}
+
+function drawingOf(source: string): Document {
+  return new DOMParser().parseFromString(source.replace(/<\?xml[^?]*\?>/, ''), 'image/svg+xml')
+}
 
 function zonesIn(source: string): Map<string, string[]> {
-  const drawing = new DOMParser().parseFromString(source.replace(/<\?xml[^?]*\?>/, ''), 'image/svg+xml')
-  const root = drawing.documentElement
-  const zones = new Map<string, string[]>()
+  return zonesUnder(drawingOf(source).documentElement)
+}
 
-  for (const shape of drawing.querySelectorAll('path[id], polygon[id], circle[id], ellipse[id]')) {
+// The smallest recorded parts drawn inside `root` (zones, and bones drawn as one
+// shape), each with the bones between it and `root`.
+function zonesUnder(root: Element): Map<string, string[]> {
+  const zones = new Map<string, string[]>()
+  const recorded = (element: Element) => Boolean(element.id) && !isUnrecorded(element)
+
+  for (const part of [...root.querySelectorAll('[id]')].filter(recorded)) {
+    if ([...part.querySelectorAll('[id]')].some(recorded)) continue
     const bones: string[] = []
-    for (let node = shape.parentElement; node && node !== root; node = node.parentElement) {
+    for (let node = part.parentElement; node && node !== root; node = node.parentElement) {
       if (node.id) bones.push(node.id)
     }
-    zones.set(shape.id, bones)
+    zones.set(part.id, bones)
   }
   return zones
 }
@@ -105,7 +96,7 @@ export type ZoneSummary = SegmentState | 'partial'
 export function summariseZones(states: Record<string, SegmentState>): Map<string, ZoneSummary> {
   const summaries = new Map<string, ZoneSummary>()
 
-  for (const [boneId, zones] of ZONE_SETS) {
+  for (const [boneId, zones] of zoneSetsOf()) {
     if (states[boneId]) continue
     const marks = [...zones].map(([zone, bones]) => states[zone] ?? bones.map((bone) => states[bone]).find(Boolean))
     if (!marks.some(Boolean)) continue
@@ -117,7 +108,7 @@ export function summariseZones(states: Record<string, SegmentState>): Map<string
 // The drawings of a bone that show it only whole: every element carrying its
 // id that has none of its zones inside it.
 export function zoneStandIns(root: ParentNode, boneId: string): Element[] {
-  const zones = ZONE_SETS.get(boneId)
+  const zones = zoneSetsOf().get(boneId)
   if (!zones) return []
   return [...root.querySelectorAll(`#${CSS.escape(boneId)}`)].filter(
     (element) => ![...element.querySelectorAll('[id]')].some((child) => zones.has(child.id)),
