@@ -656,6 +656,24 @@ function ViewToggle({ options }: { options: ViewToggleOption[] }) {
   )
 }
 
+function historyStoreKey(caseId: string): string {
+  return `osteomap:${caseId}:history`
+}
+
+function readHistory(caseId: string) {
+  try {
+    const raw = localStorage.getItem(historyStoreKey(caseId))
+    if (!raw) return { undoStack: [] as Record<string, SegmentState>[], redoStack: [] as Record<string, SegmentState>[] }
+    const parsed = JSON.parse(raw) as { undoStack?: Record<string, SegmentState>[]; redoStack?: Record<string, SegmentState>[] }
+    return {
+      undoStack: Array.isArray(parsed.undoStack) ? parsed.undoStack : [],
+      redoStack: Array.isArray(parsed.redoStack) ? parsed.redoStack : [],
+    }
+  } catch {
+    return { undoStack: [] as Record<string, SegmentState>[], redoStack: [] as Record<string, SegmentState>[] }
+  }
+}
+
 function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: NavigateFn }) {
   const [activeView, setActiveView] = useState<ActiveView>('skeleton')
   const [detailTarget, setDetailTarget] = useState<DetailTarget>('skull')
@@ -669,8 +687,8 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
   const [zoomFrame, setZoomFrame] = useState<React.CSSProperties>({})
   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle')
   // The record as it stood before each change still undoable, and after each one undone.
-  const [undoStack, setUndoStack] = useState<Record<string, SegmentState>[]>([])
-  const [redoStack, setRedoStack] = useState<Record<string, SegmentState>[]>([])
+  const [undoStack, setUndoStack] = useState<Record<string, SegmentState>[]>(() => readHistory(caseId).undoStack)
+  const [redoStack, setRedoStack] = useState<Record<string, SegmentState>[]>(() => readHistory(caseId).redoStack)
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('bone')
   const [activePaint, setActivePaint] = useState<PaintState>('present')
   const [notesOpen, setNotesOpen] = useState(false)
@@ -751,14 +769,20 @@ function SkeletonPage({ caseId, onNavigate }: { caseId: string; onNavigate: Navi
     getCase(caseId).then((data) => {
       if (!active) return
       setCaseData(data ? { ...data, segmentStates: normalisedStates(hierarchy(), data.segmentStates ?? {}) } : null)
-      setUndoStack([])
-      setRedoStack([])
+      const savedHistory = readHistory(caseId)
+      setUndoStack(savedHistory.undoStack)
+      setRedoStack(savedHistory.redoStack)
     })
 
     return () => {
       active = false
     }
   }, [caseId])
+
+  useEffect(() => {
+    if (!caseId) return
+    localStorage.setItem(historyStoreKey(caseId), JSON.stringify({ undoStack, redoStack }))
+  }, [caseId, undoStack, redoStack])
 
   useEffect(() => {
     if (!sheetOpen) return
