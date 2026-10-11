@@ -15,14 +15,21 @@ test('create a site, context and specimen, and it is still there after reload', 
   await page.getByPlaceholder('Specimen ID').fill('SK-001')
   await page.getByRole('button', { name: 'Continue specimen creation' }).click()
   await page.getByLabel('Specimen sex').selectOption('male')
-  await page.getByLabel('Specimen age group').selectOption('adult')
+  await page.getByLabel('Specimen age group').selectOption('adolescent')
+  await page.getByLabel('Specimen field notes').fill('Left femur recovered')
   await page.getByRole('button', { name: 'Save metadata' }).click()
-  // The specimen only shows up once it has been written, so wait for it before reloading
   await expect(page.getByRole('button', { name: 'SK-001' })).toBeVisible()
 
-  // Data is saved on the device, so it should survive a reload
   await page.reload()
   await page.getByRole('button', { name: 'Test Site' }).click()
   await page.getByRole('button', { name: 'Context 1' }).click()
   await expect(page.getByRole('button', { name: 'SK-001' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'View All Skeletons' }).click()
+  await expect(page.getByRole('heading', { name: 'SK-001' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit skeleton' }).click()
+  await expect(page.getByRole('textbox', { name: 'Skeleton ID' })).toHaveValue('SK-001')
+  await expect(page.getByRole('combobox', { name: 'Sex' })).toHaveValue('male')
+  await expect(page.getByRole('combobox', { name: 'Age group' })).toHaveValue('adolescent')
+  await expect(page.getByRole('textbox', { name: 'General notes' })).toHaveValue('Left femur recovered')
 })
