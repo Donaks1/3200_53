@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Database, Download, House, Info, Upload } from 'lucide-react'
+import { ArrowLeft, Database, Download, FileText, House, Info, Upload } from 'lucide-react'
 import type { NavigateFn, Page } from './types'
 import { getCase } from '../db/caseOperation'
 import { getContextById } from '../db/contextOperation'
 import { getSiteById } from '../db/siteOperation'
 import { applyImport, exportDatabaseCSV, exportSingleCaseCSV, findImportConflicts, previewDatabaseCSV } from '../db/exportImport'
 import type { ConflictResolution, ImportChoices, ImportConflict, ImportPreview } from '../db/exportImport'
+import { exportCasePDF } from '../db/exportPdf'
 import type { CaseRecord, ContextRecord, SiteRecord } from '../db/types'
 import ImportConflictPopup from '../components/ImportConflictPopup'
 import './ExportPage.css'
@@ -29,6 +30,7 @@ function ExportPage({ caseId, returnTo, onNavigate }: { caseId?: string | null; 
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [isApplyingImport, setIsApplyingImport] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   useEffect(() => {
     if (!caseId) return;
@@ -229,6 +231,22 @@ function ExportPage({ caseId, returnTo, onNavigate }: { caseId?: string | null; 
               onClick={() => caseData && runExport(() => exportSingleCaseCSV(caseData.caseId))}
             >
               <Download aria-hidden="true" /> Export This Case (.csv)
+            </button>
+          )}
+
+          {caseId && (
+            <button
+              type="button"
+              className="export-button-basic"
+              disabled={!caseData || isExportingPdf}
+              onClick={async () => {
+                if (!caseData) return;
+                setIsExportingPdf(true);
+                await runExport(() => exportCasePDF(caseData.caseId));
+                setIsExportingPdf(false);
+              }}
+            >
+              <FileText aria-hidden="true" /> {isExportingPdf ? 'Creating PDF...' : 'Export This Case (.pdf)'}
             </button>
           )}
 
