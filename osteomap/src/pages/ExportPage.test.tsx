@@ -5,7 +5,7 @@ import { db } from '../db/db'
 import ExportPage from './ExportPage'
 
 describe('ExportPage', () => {
-  it('opened without a specimen, offers only the full backup and goes back where it came from', async () => {
+  it('opened without a specimen, offers only the full backup (no PDF) and goes back where it came from', async () => {
     const onNavigate = vi.fn()
     render(<ExportPage caseId={null} returnTo="home" onNavigate={onNavigate} />)
 
@@ -28,7 +28,8 @@ describe('ExportPage', () => {
     render(<ExportPage caseId="case-1" returnTo="my-skeletons" onNavigate={onNavigate} />)
 
     expect(await screen.findByText('SK-001')).toBeVisible()
-    expect(screen.getByRole('button', { name: /Export This Case/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Export This Case \(\.csv\)/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Export This Case \(\.pdf\)/ })).toBeEnabled()
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Back' }))
     expect(onNavigate).toHaveBeenCalledWith('my-skeletons', 'case-1')
