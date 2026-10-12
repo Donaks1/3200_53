@@ -381,3 +381,62 @@ describe('INVENTORY rows', () => {
     expect(preview.cases[0].segmentStates).toMatchObject({ left_scaphoid: 'complete', right_hip_bone: 'absent' })
   })
 })
+
+describe('U6: CSV import edge cases', () => {
+  async function countRows() {
+    const [sites, contexts, cases] = await Promise.all([db.sites.count(), db.contexts.count(), db.cases.count()])
+    return { sites, contexts, cases }
+  }
+
+  it('does not duplicate a site and context that already exist', async () => {
+    await db.sites.add({ siteId: 'site-1', siteName: 'Tell A' })
+    await db.contexts.add({ contextId: 'ctx-1', contextName: 'Layer 1', siteId: 'site-1' })
+
+    const file = csvBlob(['case-new,site-1,ctx-1,Tell A,Layer 1,New one,,adult,,,'], SPECIMEN_HEADER)
+    const preview = await previewDatabaseCSV(file)
+    const result = await applyImport(preview, { sites: {}, contexts: {} }, {})
+
+    expect(result).toMatchObject({ sitesCreated: 0, contextsCreated: 0, casesImported: 1 })
+    expect(await countRows()).toEqual({ sites: 1, contexts: 1, cases: 1 })
+  })
+
+  it('uses the existing site and context when the user picks them for the imported ones', async () => {
+    await db.sites.add({ siteId: 'site-1', siteName: 'Tell A' })
+    await db.contexts.add({ contextId: 'ctx-1', contextName: 'Layer 1', siteId: 'site-1' })
+
+    const file = csvBlob(['case-new,site-x,ctx-x,Tell A,Layer 1,New one,,adult,,,'], SPECIMEN_HEADER)
+    const preview = await previewDatabaseCSV(file)
+    const choices = { sites: { 'site-x': 'site-1' }, contexts: { 'ctx-x': 'ctx-1' } }
+    await applyImport(preview, choices, {})
+
+    expect(await countRows()).toEqual({ sites: 1, contexts: 1, cases: 1 })
+    expect((await db.cases.get('case-new'))?.contextId).toBe('ctx-1')
+  })
+
+  it('shows an error for an empty file and leaves the database unchanged', async () => {
+    await db.sites.add({ siteId: 'site-1', siteName: 'Tell A' })
+    const before = await countRows()
+
+    await expect(previewDatabaseCSV(new Blob([''], { type: 'text/csv' }))).rejects.toThrow('missing the SPECIMENS table')
+
+    expect(await countRows()).toEqual(before)
+  })
+
+  it('shows an error when the SPECIMENS table has no specimens', async () => {
+    const before = await countRows()
+
+    await expect(previewDatabaseCSV(csvBlob([], SPECIMEN_HEADER))).rejects.toThrow('no specimens to import')
+
+    expect(await countRows()).toEqual(before)
+  })
+
+  it('shows an error for a file with the wrong columns and leaves the database unchanged', async () => {
+    await db.sites.add({ siteId: 'site-1', siteName: 'Tell A' })
+    const before = await countRows()
+
+    const file = csvBlob(['1,2,3'], 'Name,Colour,Size')
+    await expect(previewDatabaseCSV(file)).rejects.toThrow('missing required columns')
+
+    expect(await countRows()).toEqual(before)
+  })
+})
