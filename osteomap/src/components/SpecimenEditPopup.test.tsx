@@ -63,4 +63,37 @@ describe('SpecimenEditPopup', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("The change couldn't be saved on this device.")
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
+
+  it('does not let a blank ID be saved', async () => {
+    const { onSave, user } = renderPopup()
+    const id = screen.getByRole('textbox', { name: 'Specimen ID' })
+
+    await user.clear(id)
+    await user.type(id, '    ')
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('trims spaces around a new ID before saving', async () => {
+    const { onSave, user } = renderPopup()
+    const id = screen.getByRole('textbox', { name: 'Specimen ID' })
+
+    await user.clear(id)
+    await user.type(id, '   SK-009  ')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(onSave).toHaveBeenCalledWith({ caseName: 'SK-009', sex: 'unknown', ageGroup: 'adult', fieldNotes: '' })
+  })
+
+  it('changes nothing when Cancel is pressed', async () => {
+    const onCancel = vi.fn()
+    const { onSave, user } = renderPopup({ onCancel })
+
+    await user.type(screen.getByRole('textbox', { name: 'Specimen ID' }), '-edited')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onCancel).toHaveBeenCalled()
+    expect(onSave).not.toHaveBeenCalled()
+  })
 })
